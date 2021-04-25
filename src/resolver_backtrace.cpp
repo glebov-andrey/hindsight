@@ -16,15 +16,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/resolver.hpp>
-
 #include <hindsight/config.hpp>
 
 #ifndef HINDSIGHT_OS_WINDOWS
 
+    #include <hindsight/resolver.hpp>
+
     #include <cerrno>
     #include <cstdlib>
     #include <exception>
+    #include <memory>
     #include <new>
     #include <optional>
     #include <string_view>
@@ -38,7 +39,9 @@ namespace hindsight {
 namespace {
 
 struct free_deleter {
-    auto operator()(void *const ptr) const noexcept { std::free(ptr); }
+    auto operator()(void *const ptr) const noexcept {
+        std::free(ptr); // NOLINT(cppcoreguidelines-owning-memory, hicpp-no-malloc)
+    }
 };
 
 template<typename T>
@@ -46,7 +49,7 @@ using unique_freeable = std::unique_ptr<T, free_deleter>;
 
 
 [[nodiscard]] auto get_backtrace_state() -> backtrace_state * {
-    static const auto global_state = [] {
+    static auto *const global_state = [] { // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
         auto is_bad_alloc = false;
         auto *const result = backtrace_create_state(
                 nullptr,
@@ -68,8 +71,6 @@ using unique_freeable = std::unique_ptr<T, free_deleter>;
 
 struct logical_stacktrace_entry::impl_tag {};
 
-logical_stacktrace_entry::logical_stacktrace_entry() noexcept = default;
-
 logical_stacktrace_entry::logical_stacktrace_entry(impl_tag && /* impl */,
                                                    const stacktrace_entry physical,
                                                    const bool is_inline,
@@ -82,23 +83,21 @@ logical_stacktrace_entry::logical_stacktrace_entry(impl_tag && /* impl */,
 
 logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other) = default;
 
-logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry &&other) noexcept = default;
-
 logical_stacktrace_entry::~logical_stacktrace_entry() = default;
 
-auto logical_stacktrace_entry::operator=(const logical_stacktrace_entry &other) -> logical_stacktrace_entry & = default;
-
-auto logical_stacktrace_entry::operator=(logical_stacktrace_entry &&other) noexcept
-        -> logical_stacktrace_entry & = default;
+auto logical_stacktrace_entry::symbol() const -> std::string { return m_symbol; }
 
 // TODO: Implement conversion to UTF-8
 // auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {}
+
+auto logical_stacktrace_entry::source() const -> source_location { return m_source; }
+
 // auto logical_stacktrace_entry::u8_source() const -> u8_source_location {}
+
+auto logical_stacktrace_entry::set_inline(impl_tag && /* impl */) noexcept -> void { m_is_inline = true; }
 
 
 resolver::resolver() = default;
-
-resolver::~resolver() = default;
 
 auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const callback, void *const user_data) -> void {
     const auto on_failure = [&] { callback({{}, entry, false, {}, {}}, user_data); };
@@ -149,7 +148,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const call
                     if (state.flush_buffered_entry(true)) {
                         return 0;
                     }
-                    auto demangled_ptr = unique_freeable<char[]>{};
+                    auto demangled_ptr = unique_freeable<char[]>{}; // NOLINT(hicpp-avoid-c-arrays)
                     auto symbol_view = std::string_view{};
                     if (function) {
                         auto demangle_status = 0;

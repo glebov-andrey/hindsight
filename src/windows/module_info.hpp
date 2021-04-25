@@ -29,7 +29,7 @@ struct module_info {
     std::uintptr_t base_offset;
 };
 
-[[nodiscard]] auto get_module_info_by_address(const std::uintptr_t address) -> module_info;
+[[nodiscard]] auto get_module_info_by_address(std::uintptr_t address) -> module_info;
 
 } // namespace hindsight::windows
 

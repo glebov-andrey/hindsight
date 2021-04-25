@@ -38,12 +38,9 @@ class com_ptr {
 public:
     constexpr com_ptr() noexcept = default;
 
-    explicit(false) constexpr com_ptr(std::nullptr_t) noexcept : com_ptr{} {}
+    constexpr explicit(false) com_ptr(std::nullptr_t) noexcept : com_ptr{} {} // NOLINT(hicpp-explicit-conversions)
 
-    explicit constexpr com_ptr(T *const ptr) noexcept : m_ptr{ptr} {}
-
-    template<std::derived_from<T> U>
-    explicit(false) constexpr com_ptr(com_ptr<U> &&other) noexcept : m_ptr{std::exchange(other.m_ptr, nullptr)} {}
+    constexpr explicit com_ptr(T *const ptr) noexcept : m_ptr{ptr} {}
 
     constexpr com_ptr(const com_ptr &other) noexcept : m_ptr{other.m_ptr} {
         if (m_ptr) {
@@ -53,24 +50,24 @@ public:
 
     constexpr com_ptr(com_ptr &&other) noexcept : m_ptr{std::exchange(other.m_ptr, nullptr)} {}
 
+    template<std::derived_from<T> U> // NOLINTNEXTLINE(hicpp-explicit-conversions)
+    constexpr explicit(false) com_ptr(com_ptr<U> &&other) noexcept : m_ptr{std::exchange(other.m_ptr, nullptr)} {}
+
     constexpr ~com_ptr() { reset(); }
 
     constexpr auto operator=(const com_ptr &other) noexcept -> com_ptr & {
-        auto tmp = other;
-        swap(*this, tmp);
+        com_ptr{other}.swap(*this);
         return *this;
     }
 
     constexpr auto operator=(com_ptr &&other) noexcept -> com_ptr & {
-        auto tmp = std::move(other);
-        swap(*this, tmp);
+        com_ptr{std::move(other)}.swap(*this);
         return *this;
     }
 
     template<std::derived_from<T> U>
     constexpr auto operator=(com_ptr<U> &&other) noexcept -> com_ptr & {
-        auto tmp = com_ptr{std::move(other)};
-        swap(*this, tmp);
+        com_ptr{std::move(other)}.swap(*this);
         return *this;
     }
 
@@ -79,17 +76,21 @@ public:
         return *this;
     }
 
+    constexpr auto swap(com_ptr &other) noexcept { std::ranges::swap(m_ptr, other.m_ptr); }
+
+    friend constexpr auto swap(com_ptr &lhs, com_ptr &rhs) noexcept { lhs.swap(rhs); }
+
     constexpr auto release() noexcept -> T * { return std::exchange(m_ptr, nullptr); }
 
-    constexpr auto reset(T *const ptr = nullptr) noexcept {
-        if (const auto prev_ptr = std::exchange(m_ptr, ptr); prev_ptr) {
+    constexpr auto reset(T *const ptr = nullptr) noexcept -> void {
+        if (auto *const prev_ptr = std::exchange(m_ptr, ptr); prev_ptr) {
             prev_ptr->Release();
         }
     }
 
     [[nodiscard]] constexpr auto get() const noexcept -> T * { return m_ptr; }
 
-    [[nodiscard]] explicit constexpr operator bool() const noexcept { return m_ptr != nullptr; }
+    [[nodiscard]] constexpr explicit operator bool() const noexcept { return m_ptr != nullptr; }
 
     [[nodiscard]] constexpr auto operator*() const noexcept -> T & {
         assert(m_ptr);
@@ -101,9 +102,8 @@ public:
         return m_ptr;
     }
 
+    // NOLINTNEXTLINE(google-runtime-operator)
     [[nodiscard]] constexpr auto operator&() noexcept -> T ** { return &m_ptr; }
-
-    friend constexpr auto swap(com_ptr &lhs, com_ptr &rhs) noexcept { std::ranges::swap(lhs.m_ptr, rhs.m_ptr); }
 
 private:
     T *m_ptr = nullptr;
@@ -118,7 +118,11 @@ public:
 
     constexpr bstr(bstr &&other) noexcept : m_ptr{std::exchange(other.m_ptr, nullptr)} {}
 
-    ~bstr() noexcept { SysFreeString(m_ptr); }
+    ~bstr() {
+        // clang-tidy (as of 12.0.0) incorrectly assumes that the default constructor does not write to m_ptr even
+        // though it has a default member initializer.
+        SysFreeString(m_ptr); // NOLINT(clang-analyzer-core.CallAndMessage)
+    }
 
     auto operator=(const bstr &other) -> bstr & = delete;
 
@@ -134,8 +138,10 @@ public:
 
     [[nodiscard]] auto empty() const noexcept -> bool { return size() == 0; }
 
+    // NOLINTNEXTLINE(hicpp-explicit-conversions)
     [[nodiscard]] explicit(false) operator std::wstring_view() const noexcept { return {data(), size()}; }
 
+    // NOLINTNEXTLINE(google-runtime-operator)
     [[nodiscard]] constexpr auto operator&() noexcept -> BSTR * { return &m_ptr; }
 
     friend constexpr auto swap(bstr &lhs, bstr &rhs) noexcept -> void { std::ranges::swap(lhs.m_ptr, rhs.m_ptr); }

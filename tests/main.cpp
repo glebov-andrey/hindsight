@@ -16,16 +16,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/stacktrace.hpp>
-
-namespace hindsight {
-
-auto capture_stack_trace(const std::size_t entries_to_skip) -> std::vector<stacktrace_entry> {
-    constexpr auto initial_stack_trace_capacity = std::size_t{16};
-    auto entries = std::vector<stacktrace_entry>();
-    entries.reserve(initial_stack_trace_capacity);
-    capture_stack_trace(std::back_inserter(entries), std::unreachable_sentinel, entries_to_skip);
-    return entries;
-}
-
-} // namespace hindsight
+#define CATCH_CONFIG_MAIN
+#include <catch2/catch.hpp>

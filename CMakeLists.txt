@@ -24,69 +24,67 @@ project(
     LANGUAGES CXX)
 
 option(HINDSIGHT_INCLUDE_CONANBUILDINFO "Include conanbuildinfo.cmake" OFF)
+option(HINDSIGHT_WITH_FMT "Enable native fmt support" OFF)
+option(HINDSIGHT_BUILD_TESTS "Build tests" ON)
+option(HINDSIGHT_BUILD_EXAMPLES "Build examples" OFF)
+option(HINDSIGHT_BUILD_DOCS "Build documentation" OFF)
+option(HINDSIGHT_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
+
+list(PREPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
 if (HINDSIGHT_INCLUDE_CONANBUILDINFO)
     include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
     conan_basic_setup(TARGETS)
 endif ()
 
-list(PREPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
-
-option(HINDSIGHT_BUILD_TESTING "Build tests" ON)
-if (HINDSIGHT_BUILD_TESTING)
-    enable_testing()
-endif ()
+include(tools/cmake/default_options.cmake)
+include(tools/cmake/clang_tidy.cmake)
+initialize_clang_tidy()
 
 find_package(Threads REQUIRED)
+if (HINDSIGHT_WITH_FMT)
+    find_package(fmt REQUIRED)
+endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(DIA REQUIRED)
 else ()
+    find_package(libunwind REQUIRED COMPONENTS generic)
     find_package(libbacktrace REQUIRED)
 endif ()
 
 add_library(hindsight)
 target_include_directories(hindsight PUBLIC include)
 target_compile_features(hindsight PUBLIC cxx_std_20)
-target_link_libraries(hindsight PUBLIC Threads::Threads)
+target_link_libraries(hindsight PUBLIC Threads::Threads hindsight::default_options)
+fix_static_pdb_name(hindsight)
+set_target_clang_tidy(hindsight)
 if (BUILD_SHARED_LIBS)
     target_compile_definitions(
         hindsight
         PUBLIC HINDSIGHT_SHARED
         PRIVATE HINDSIGHT_SHARED_BUILD)
 endif ()
+if (HINDSIGHT_WITH_FMT)
+    target_compile_definitions(hindsight PUBLIC HINDSIGHT_WITH_FMT)
+    target_link_libraries(hindsight PUBLIC fmt::fmt)
+endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_compile_definitions(hindsight PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(hindsight PRIVATE DIA::DIA)
-    if (NOT BUILD_SHARED_LIBS)
-        set_target_properties(
-            hindsight
-            PROPERTIES COMPILE_PDB_NAME hindsight #
-                       COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-    endif ()
 else ()
-    target_link_libraries(hindsight PRIVATE unwind unwind-${CMAKE_SYSTEM_PROCESSOR} libbacktrace::libbacktrace)
+    target_link_libraries(hindsight PRIVATE libunwind::generic libbacktrace::libbacktrace)
 endif ()
 
-target_sources(
-    hindsight
-    PRIVATE # cmake-format: sort
-            include/hindsight/config.hpp
-            include/hindsight/resolver.hpp
-            include/hindsight/stacktrace.hpp
-            src/resolver_backtrace.cpp
-            src/resolver_windows.cpp
-            src/stacktrace.cpp
-            src/stacktrace_unix.cpp
-            src/stacktrace_windows.cpp
-            src/util/locked.cpp
-            src/util/locked.hpp)
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_sources(
-        hindsight
-        PRIVATE # cmake-format: sort
-                src/windows/com.cpp
-                src/windows/com.hpp
-                src/windows/encoding.cpp
-                src/windows/encoding.hpp
-                src/windows/module_info.cpp
-                src/windows/module_info.hpp)
+if (HINDSIGHT_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif ()
+
+if (HINDSIGHT_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif ()
+
+if (HINDSIGHT_BUILD_DOCS)
+    add_subdirectory(docs)
+endif ()
+
+add_subdirectory(include)
+add_subdirectory(src)

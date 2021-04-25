@@ -22,6 +22,7 @@
 #include <cassert>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -34,11 +35,22 @@ namespace hindsight::windows {
 
 namespace {
 
-[[nodiscard]] auto get_module_handle_by_address(const std::uintptr_t address) -> HMODULE {
-    auto module_handle = HMODULE{};
-    // GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT is safe here because we assume that the pointer remains valid, i.e.
-    // the module does not get concurrently unloaded.
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+struct close_module_handle {
+    using pointer = HMODULE;
+
+    auto operator()(const HMODULE handle) const noexcept -> void {
+        [[maybe_unused]] const auto success = FreeLibrary(handle);
+        assert(success);
+    }
+};
+
+using unique_module_handle = std::unique_ptr<HMODULE, close_module_handle>;
+
+
+[[nodiscard]] auto get_module_handle_by_address(const std::uintptr_t address) -> unique_module_handle {
+    auto module_handle = HMODULE{}; // NOLINT(readability-qualified-auto)
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
                             reinterpret_cast<LPCWSTR>(address),
                             &module_handle)) {
         throw std::system_error{static_cast<int>(GetLastError()),
@@ -46,7 +58,7 @@ namespace {
                                 "Failed to get module from address"};
     }
     assert(module_handle);
-    return module_handle;
+    return unique_module_handle{module_handle};
 }
 
 [[nodiscard]] auto get_module_path_by_handle(const HMODULE handle) -> std::wstring {
@@ -57,7 +69,7 @@ namespace {
         const auto path_buffer_size_with_null = path.size() + 1;
         const auto filled_chars = GetModuleFileNameW(handle, &path[0], static_cast<DWORD>(path_buffer_size_with_null));
         assert(filled_chars <= path_buffer_size_with_null);
-        if (!filled_chars) {
+        if (filled_chars == 0) {
             throw std::system_error{static_cast<int>(GetLastError()),
                                     std::system_category(),
                                     "Failed to get module file name"};
@@ -89,6 +101,7 @@ namespace {
                                 std::system_category(),
                                 "Failed to get module information"};
     }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     return reinterpret_cast<std::uintptr_t>(module_info.lpBaseOfDll);
 }
 
@@ -96,7 +109,8 @@ namespace {
 
 [[nodiscard]] auto get_module_info_by_address(const std::uintptr_t address) -> module_info {
     const auto handle = get_module_handle_by_address(address);
-    return {.file_path = get_module_path_by_handle(handle), .base_offset = get_module_base_by_handle(handle)};
+    return {.file_path = get_module_path_by_handle(handle.get()),
+            .base_offset = get_module_base_by_handle(handle.get())};
 }
 
 } // namespace hindsight::windows

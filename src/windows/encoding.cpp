@@ -35,7 +35,7 @@ template<typename CharT>
     if constexpr (std::same_as<CharT, char>) {
         return ptr;
     } else {
-        return reinterpret_cast<char *>(ptr);
+        return reinterpret_cast<char *>(ptr); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     }
 }
 

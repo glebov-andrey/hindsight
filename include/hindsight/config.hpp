@@ -31,12 +31,15 @@
 #ifdef HINDSIGHT_OS_WINDOWS
     #define HINDSIGHT_API_EXPORT __declspec(dllexport)
     #define HINDSIGHT_API_IMPORT __declspec(dllimport)
+    #define HINDSIGHT_API_HIDDEN
 #elif defined __GNUC__
     #define HINDSIGHT_API_EXPORT [[gnu::visibility("default")]]
     #define HINDSIGHT_API_IMPORT
+    #define HINDSIGHT_API_HIDDEN [[gnu::visibility("hidden")]]
 #else
     #define HINDSIGHT_API_EXPORT
     #define HINDSIGHT_API_IMPORT
+    #define HINDSIGHT_API_HIDDEN
 #endif
 
 #ifdef HINDSIGHT_SHARED
@@ -47,6 +50,18 @@
     #endif
 #else
     #define HINDSIGHT_API
+#endif
+
+#ifdef __clang__
+    #define HINDSIGHT_PRAGMA_CLANG(str) _Pragma(str)
+#else
+    #define HINDSIGHT_PRAGMA_CLANG(str)
+#endif
+
+#if defined _MSC_VER && !defined __clang__
+    #define HINDSIGHT_PRAGMA_MSVC(str) _Pragma(str)
+#else
+    #define HINDSIGHT_PRAGMA_MSVC(str)
 #endif
 
 #endif // HINDSIGHT_INCLUDE_HINDSIGHT_CONFIG_HPP

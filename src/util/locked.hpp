@@ -41,14 +41,21 @@ concept nothrow_lockable = basic_lockable<Lock> && requires(Lock &lock) {
 };
 
 
-template<std::destructible T, basic_lockable Lock = std::mutex>
+template<typename T, basic_lockable Lock = std::mutex>
 class locked {
 public:
     template<typename... Args>
         requires std::constructible_from<T, Args...>
-    constexpr explicit locked(Args &&...args) //
-            noexcept(std::is_nothrow_constructible_v<T, Args...>)
+    constexpr explicit locked(Args &&...args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
             : m_value(std::forward<Args>(args)...) {}
+
+    locked(const locked &other) = delete;
+    locked(locked &&other) = delete;
+
+    ~locked() = default;
+
+    auto operator=(const locked &rhs) = delete;
+    auto operator=(locked &&rhs) = delete;
 
     template<std::invocable<const T &> Fn>
     auto with_lock(Fn &&fn) const noexcept(nothrow_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, const T &>)
@@ -64,7 +71,7 @@ public:
     }
 
 private:
-    Lock m_lock{};
+    mutable Lock m_lock{};
     T m_value;
 };
 

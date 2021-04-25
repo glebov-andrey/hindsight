@@ -19,49 +19,56 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_HPP
 
+#include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <iterator>
+#include <memory>
 #include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+#include <hindsight/config.hpp>
+#include <hindsight/stacktrace_entry.hpp>
+
+#ifdef HINDSIGHT_OS_WINDOWS
+using CONTEXT = struct _CONTEXT; // NOLINT(bugprone-reserved-identifier)
+#else
+using ucontext_t = struct ucontext_t;
+#endif
+
 namespace hindsight {
 
-struct from_native_handle_t {};
-
-inline constexpr auto from_native_handle = from_native_handle_t{};
-
-
-class stacktrace_entry {
-public:
-    using native_handle_type = std::uintptr_t;
-
-    constexpr stacktrace_entry() noexcept = default;
-
-    constexpr stacktrace_entry(from_native_handle_t /* from_native_handle */, const native_handle_type handle) noexcept
-            : m_handle{handle} {}
-
-    [[nodiscard]] constexpr explicit operator bool() const noexcept { return m_handle; }
-
-    [[nodiscard]] constexpr auto native_handle() const noexcept -> native_handle_type { return m_handle; }
-
-private:
-    native_handle_type m_handle{};
-};
+#ifdef HINDSIGHT_OS_WINDOWS
+using native_context_type = CONTEXT;
+#else
+using native_context_type = ucontext_t;
+#endif
 
 namespace detail {
 
 // Returns true if done
 using capture_stack_trace_cb = bool(stacktrace_entry entry, void *user_data);
 
-auto capture_stack_trace_impl(std::size_t entries_to_skip, capture_stack_trace_cb *callback, void *user_data) -> void;
+HINDSIGHT_API auto capture_stack_trace_from_mutable_context_impl(native_context_type &context,
+                                                                 std::size_t entries_to_skip,
+                                                                 capture_stack_trace_cb *callback,
+                                                                 void *user_data) -> void;
 
-} // namespace detail
+HINDSIGHT_API auto capture_stack_trace_impl(std::size_t entries_to_skip,
+                                            capture_stack_trace_cb *callback,
+                                            void *user_data) -> void;
 
-template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
-[[nodiscard]] auto capture_stack_trace(It first, Sentinel last, const std::size_t entries_to_skip = 0)
+HINDSIGHT_API auto capture_stack_trace_from_context_impl(const native_context_type &context,
+                                                         std::size_t entries_to_skip,
+                                                         capture_stack_trace_cb *callback,
+                                                         void *user_data) -> void;
+
+template<typename ImplFunction, std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
+[[nodiscard]] auto capture_stack_trace_iterator_adapter(const ImplFunction impl_function,
+                                                        It first,
+                                                        Sentinel last,
+                                                        const std::size_t entries_to_skip)
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
     if (first == last) {
         if constexpr (std::forward_iterator<It>) {
@@ -72,17 +79,13 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
     }
 
     struct cb_state {
-#ifdef __clang__
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wunknown-attributes"
-#endif
+        HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
+        HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wunknown-attributes\"")
         [[no_unique_address]] It first;
         [[no_unique_address]] const Sentinel last;
-#ifdef __clang__
-    #pragma clang diagnostic pop
-#endif
+        HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
     } state{.first = std::move(first), .last = std::move(last)};
-    detail::capture_stack_trace_impl(
+    impl_function(
             entries_to_skip,
             [](const stacktrace_entry entry, void *const state_ptr) {
                 auto &state = *static_cast<cb_state *>(state_ptr);
@@ -96,21 +99,55 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
     }
 }
 
-template<std::ranges::output_range<stacktrace_entry> Range>
-    requires std::ranges::forward_range<Range>
-[[nodiscard]] auto capture_stack_trace(Range &&range, const std::size_t entries_to_skip = 0)
-        -> std::ranges::borrowed_subrange_t<Range> {
-    return {std::ranges::begin(range),
-            capture_stack_trace(std::ranges::begin(range), std::ranges::end(range), entries_to_skip)};
+} // namespace detail
+
+template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
+[[nodiscard]] auto capture_stack_trace(It first, Sentinel last, const std::size_t entries_to_skip = 0)
+        -> std::conditional_t<std::forward_iterator<It>, It, void> {
+    return detail::capture_stack_trace_iterator_adapter(
+            [](const auto... args) { detail::capture_stack_trace_impl(args...); },
+            std::move(first),
+            std::move(last),
+            entries_to_skip);
 }
 
 template<std::ranges::output_range<stacktrace_entry> Range>
-    requires(!std::ranges::forward_range<Range>)
-auto capture_stack_trace(Range &&range, const std::size_t entries_to_skip = 0) -> void {
-    capture_stack_trace(std::ranges::begin(range), std::ranges::end(range), entries_to_skip);
+[[nodiscard]] auto capture_stack_trace(Range &&range, const std::size_t entries_to_skip = 0) {
+    if constexpr (std::ranges::forward_range<Range>) {
+        return std::ranges::borrowed_subrange_t<Range>{
+                std::ranges::begin(range),
+                capture_stack_trace(std::ranges::begin(range), std::ranges::end(range), entries_to_skip)};
+    } else {
+        capture_stack_trace(std::ranges::begin(range), std::ranges::end(range), entries_to_skip);
+    }
 }
 
-[[nodiscard]] auto capture_stack_trace(std::size_t entries_to_skip = 0) -> std::vector<stacktrace_entry>;
+template<typename Allocator = std::allocator<stacktrace_entry>>
+[[nodiscard]] auto capture_stack_trace(const std::size_t entries_to_skip = 0, const Allocator &allocator = Allocator())
+        -> std::vector<stacktrace_entry,
+                       typename std::allocator_traits<Allocator>::template rebind_alloc<stacktrace_entry>> {
+    static constexpr auto initial_stack_trace_capacity = std::size_t{16};
+    using rebound_allocator = typename std::allocator_traits<Allocator>::template rebind_alloc<stacktrace_entry>;
+
+    auto entries = std::vector<stacktrace_entry, rebound_allocator>(allocator);
+    entries.reserve(initial_stack_trace_capacity);
+    capture_stack_trace(std::back_inserter(entries), std::unreachable_sentinel, entries_to_skip);
+    return entries;
+}
+
+
+template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
+[[nodiscard]] auto capture_stack_trace_from_context(const native_context_type &context,
+                                                    It first,
+                                                    Sentinel last,
+                                                    const std::size_t entries_to_skip = 0)
+        -> std::conditional_t<std::forward_iterator<It>, It, void> {
+    return detail::capture_stack_trace_iterator_adapter(
+            [&context](const auto... args) { detail::capture_stack_trace_from_context_impl(context, args...); },
+            std::move(first),
+            std::move(last),
+            entries_to_skip);
+}
 
 } // namespace hindsight
 

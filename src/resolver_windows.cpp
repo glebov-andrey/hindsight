@@ -16,11 +16,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/resolver.hpp>
-
 #include <hindsight/config.hpp>
 
 #ifdef HINDSIGHT_OS_WINDOWS
+
+    #include <hindsight/resolver.hpp>
 
     #include <concepts>
     #include <tuple>
@@ -29,14 +29,10 @@
     #include <Windows.h>
     // Windows.h must be included before other headers
     #include <dia2.h>
-    #ifdef __clang__
-        #pragma clang diagnostic push
-        #pragma clang diagnostic ignored "-Wlanguage-extension-token" // __wchar_t used in diacreate.h
-    #endif
+HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
+HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wlanguage-extension-token\"") // __wchar_t used in diacreate.h
     #include <diacreate.h>
-    #ifdef __clang__
-        #pragma clang diagnostic pop
-    #endif
+HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
 
     #include "util/locked.hpp"
 
@@ -47,23 +43,17 @@
 namespace hindsight {
 
 struct logical_stacktrace_entry::impl_payload {
-    constexpr impl_payload() noexcept = default;
-
-    constexpr impl_payload(windows::com_ptr<IDiaSession> session_, windows::com_ptr<IDiaSymbol> symbol_) noexcept
-            : session{std::move(session_)},
-              symbol{std::move(symbol_)} {}
-
     windows::com_ptr<IDiaSession> session{};
     windows::com_ptr<IDiaSymbol> symbol{};
 };
 
 
-logical_stacktrace_entry::logical_stacktrace_entry() noexcept {
+logical_stacktrace_entry::logical_stacktrace_entry() noexcept { // NOLINT(hicpp-member-init)
     static_assert(sizeof(impl_payload) == impl_payload_size);
     new (static_cast<void *>(m_impl_storage.data())) impl_payload{};
 }
 
-logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
+logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical, // NOLINT(hicpp-member-init)
                                                    const bool is_inline,
                                                    impl_payload &&impl) noexcept
         : m_physical{physical},
@@ -71,12 +61,13 @@ logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physic
     new (static_cast<void *>(m_impl_storage.data())) impl_payload{std::move(impl)};
 }
 
-logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other)
+logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other) // NOLINT(hicpp-member-init)
         : m_physical{other.m_physical},
           m_is_inline{other.m_is_inline} {
     new (static_cast<void *>(m_impl_storage.data())) impl_payload(other.impl());
 }
 
+// NOLINTNEXTLINE(hicpp-member-init)
 logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry &&other) noexcept
         : m_physical{std::exchange(other.m_physical, stacktrace_entry{})},
           m_is_inline{std::exchange(other.m_is_inline, false)} {
@@ -85,20 +76,10 @@ logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry &&ot
 
 logical_stacktrace_entry::~logical_stacktrace_entry() { impl().~impl_payload(); }
 
-auto logical_stacktrace_entry::operator=(const logical_stacktrace_entry &other) -> logical_stacktrace_entry & {
-    m_physical = other.m_physical;
-    m_is_inline = other.m_is_inline;
-    impl() = other.impl();
-    return *this;
-}
-
-auto logical_stacktrace_entry::operator=(logical_stacktrace_entry &&other) noexcept -> logical_stacktrace_entry & {
-    auto tmp_physical = std::exchange(other.m_physical, stacktrace_entry{});
-    auto tmp_is_inline = std::exchange(other.m_is_inline, false);
-    std::ranges::swap(m_physical, tmp_physical);
-    std::ranges::swap(m_is_inline, tmp_is_inline);
-    impl() = std::move(other.impl());
-    return *this;
+auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noexcept -> void {
+    std::ranges::swap(m_physical, other.m_physical);
+    std::ranges::swap(m_is_inline, other.m_is_inline);
+    std::ranges::swap(impl(), other.impl());
 }
 
 namespace {
@@ -189,6 +170,7 @@ public:
             auto dia_data_source = windows::com_ptr<IDiaDataSource>{};
             {
                 void *dia_data_source_void = nullptr;
+                // TODO: Detect the correct DLL name in FindDIA.cmake
                 if (const auto result =
                             NoRegCoCreate(L"msdia140.dll", CLSID_DiaSource, IID_IDiaDataSource, &dia_data_source_void);
                     FAILED(result) || !dia_data_source_void) {

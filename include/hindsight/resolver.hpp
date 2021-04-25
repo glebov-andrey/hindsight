@@ -19,30 +19,35 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_RESOLVER_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_RESOLVER_HPP
 
-#include <array>
-#include <cstddef>
+#include <hindsight/config.hpp>
+
+#include <concepts>
 #include <cstdint>
 #include <iterator>
-#include <memory>
+#include <ranges>
 #include <string>
 #include <utility>
+#ifdef HINDSIGHT_OS_WINDOWS
+    #include <array>
+    #include <cstddef>
+    #include <memory>
+#endif
 
-#include <hindsight/config.hpp>
 #include <hindsight/stacktrace.hpp>
 
 namespace hindsight {
 
 template<typename Char>
 struct basic_source_location {
-    std::basic_string<Char> file_name;
-    std::uint_least32_t line_number;
+    std::basic_string<Char> file_name{};
+    std::uint_least32_t line_number{};
 };
 
 using source_location = basic_source_location<char>;
 using u8_source_location = basic_source_location<char8_t>;
 
 
-class logical_stacktrace_entry {
+class HINDSIGHT_API logical_stacktrace_entry {
 public:
     logical_stacktrace_entry() noexcept;
 
@@ -51,8 +56,21 @@ public:
 
     ~logical_stacktrace_entry();
 
-    auto operator=(const logical_stacktrace_entry &other) -> logical_stacktrace_entry &;
-    auto operator=(logical_stacktrace_entry &&other) noexcept -> logical_stacktrace_entry &;
+    auto operator=(const logical_stacktrace_entry &other) -> logical_stacktrace_entry & {
+        logical_stacktrace_entry{other}.swap(*this);
+        return *this;
+    }
+
+    auto operator=(logical_stacktrace_entry &&other) noexcept -> logical_stacktrace_entry & {
+        logical_stacktrace_entry{std::move(other)}.swap(*this);
+        return *this;
+    }
+
+    auto swap(logical_stacktrace_entry &other) noexcept -> void;
+
+    HINDSIGHT_API friend auto swap(logical_stacktrace_entry &lhs, logical_stacktrace_entry &rhs) noexcept -> void {
+        lhs.swap(rhs);
+    }
 
     [[nodiscard]] auto physical() const noexcept -> stacktrace_entry { return m_physical; }
 
@@ -66,15 +84,17 @@ public:
 
 #ifdef HINDSIGHT_OS_WINDOWS
     struct impl_payload;
-    logical_stacktrace_entry(stacktrace_entry physical, bool is_inline, impl_payload &&impl) noexcept;
+    HINDSIGHT_API_HIDDEN logical_stacktrace_entry(stacktrace_entry physical,
+                                                  bool is_inline,
+                                                  impl_payload &&impl) noexcept;
 #else
     struct impl_tag;
-    logical_stacktrace_entry(impl_tag &&impl,
-                             stacktrace_entry physical,
-                             bool is_inline,
-                             std::string &&symbol,
-                             source_location &&source) noexcept;
-    auto set_inline(impl_tag && /* impl */) noexcept -> void { m_is_inline = true; }
+    HINDSIGHT_API_HIDDEN logical_stacktrace_entry(impl_tag &&impl,
+                                                  stacktrace_entry physical,
+                                                  bool is_inline,
+                                                  std::string &&symbol,
+                                                  source_location &&source) noexcept;
+    HINDSIGHT_API_HIDDEN auto set_inline(impl_tag && /* impl */) noexcept -> void;
 #endif
 
 private:
@@ -85,28 +105,37 @@ private:
     static constexpr auto impl_payload_size = sizeof(void *) * 2;
     std::array<std::byte, impl_payload_size> m_impl_storage;
 
-    [[nodiscard]] auto impl() const noexcept -> const impl_payload & {
+    HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() const noexcept -> const impl_payload & {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         return *reinterpret_cast<const impl_payload *>(m_impl_storage.data());
     }
 
-    [[nodiscard]] auto impl() noexcept -> impl_payload & {
+    HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() noexcept -> impl_payload & {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         return *reinterpret_cast<impl_payload *>(m_impl_storage.data());
     }
 #else
-    std::string m_symbol;
-    source_location m_source;
+    std::string m_symbol{};
+    source_location m_source{};
 #endif
 };
 
 #ifndef HINDSIGHT_OS_WINDOWS
 
-inline auto logical_stacktrace_entry::symbol() const -> std::string { return m_symbol; }
-inline auto logical_stacktrace_entry::source() const -> source_location { return m_source; }
+inline logical_stacktrace_entry::logical_stacktrace_entry() noexcept = default;
+inline logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry &&other) noexcept = default;
+
+inline auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noexcept -> void {
+    std::ranges::swap(m_physical, other.m_physical);
+    std::ranges::swap(m_is_inline, other.m_is_inline);
+    std::ranges::swap(m_symbol, other.m_symbol);
+    std::ranges::swap(m_source, other.m_source);
+}
 
 #endif
 
 
-class resolver {
+class HINDSIGHT_API resolver {
 public:
     explicit resolver();
 
@@ -114,7 +143,11 @@ public:
 
     resolver(resolver &&other) noexcept = default;
 
-    ~resolver();
+    ~resolver()
+#ifndef HINDSIGHT_OS_WINDOWS
+            = default
+#endif
+            ;
 
     auto operator=(const resolver &other) -> resolver & = delete;
 
@@ -132,15 +165,11 @@ public:
         }
 
         struct cb_state {
-#ifdef __clang__
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wunknown-attributes"
-#endif
+            HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
+            HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wunknown-attributes\"")
             [[no_unique_address]] It first;
             [[no_unique_address]] const Sentinel last;
-#ifdef __clang__
-    #pragma clang diagnostic pop
-#endif
+            HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
         } state{.first = std::move(first), .last = std::move(last)};
         resolve_impl(
                 entry,
@@ -156,6 +185,17 @@ public:
         }
     }
 
+    template<std::ranges::output_range<logical_stacktrace_entry> Range>
+    [[nodiscard]] auto resolve(const stacktrace_entry entry, Range &&range) {
+        if constexpr (std::ranges::forward_range<Range>) {
+            return std::ranges::borrowed_subrange_t<Range>{
+                    std::ranges::begin(range),
+                    resolve(entry, std::ranges::begin(range), std::ranges::end(range))};
+        } else {
+            resolve(entry, std::ranges::begin(range), std::ranges::end(range));
+        }
+    }
+
 private:
     // Returns true if done
     using resolve_cb = bool(logical_stacktrace_entry &&logical, void *user_data);
@@ -164,7 +204,11 @@ private:
 
 #ifdef HINDSIGHT_OS_WINDOWS
     class impl;
+    HINDSIGHT_PRAGMA_MSVC("warning(push)")
+    // std::unique_ptr<impl> needs to have dll-interface to be used by clients of class 'hindsight::resolver'
+    HINDSIGHT_PRAGMA_MSVC("warning(disable : 4251)")
     std::unique_ptr<impl> m_impl;
+    HINDSIGHT_PRAGMA_MSVC("warning(pop)")
 #endif
 };
 
