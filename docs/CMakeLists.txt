@@ -14,12 +14,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-find_package(Catch2 REQUIRED)
+find_package(Doxygen REQUIRED)
 
-add_executable(hindsight_tests)
-target_link_libraries(hindsight_tests PRIVATE hindsight::default_options hindsight::hindsight)
-target_link_libraries(hindsight_tests PRIVATE Catch2::Catch2)
-target_sources(hindsight_tests PRIVATE main.cpp)
+set(DOXYGEN_HEADERS ${HINDSIGHT_PUBLIC_HEADERS})
+list(TRANSFORM DOXYGEN_HEADERS PREPEND "include/")
 
-include(Catch)
-catch_discover_tests(hindsight_tests)
+set(DOXYGEN_PREDEFINED HINDSIGHT_GENERATING_DOCUMENTATION)
+set(DOXYGEN_TAGFILES "docs/cppreference-doxygen-web.tag.xml=https://en.cppreference.com/w/")
+
+doxygen_add_docs(docs ${DOXYGEN_HEADERS} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

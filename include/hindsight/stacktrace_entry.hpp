@@ -19,6 +19,9 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_ENTRY_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_ENTRY_HPP
 
+#include <hindsight/config.hpp>
+
+#include <compare>
 #include <cstdint>
 #include <iosfwd>
 
@@ -30,11 +33,11 @@
     #include <fmt/format.h>
 #endif
 
-#include <hindsight/config.hpp>
-
 namespace hindsight {
 
-struct from_native_handle_t {};
+struct from_native_handle_t {
+    explicit constexpr from_native_handle_t() = default;
+};
 
 inline constexpr auto from_native_handle = from_native_handle_t{};
 
@@ -51,6 +54,12 @@ public:
     [[nodiscard]] constexpr explicit operator bool() const noexcept { return m_handle != 0; }
 
     [[nodiscard]] constexpr auto native_handle() const noexcept -> native_handle_type { return m_handle; }
+
+    [[nodiscard]] friend constexpr auto operator==(stacktrace_entry lhs, stacktrace_entry rhs) noexcept
+            -> bool = default;
+
+    [[nodiscard]] friend constexpr auto operator<=>(stacktrace_entry lhs, stacktrace_entry rhs) noexcept
+            -> std::strong_ordering = default;
 
     HINDSIGHT_API friend auto operator<<(std::ostream &stream, stacktrace_entry entry) -> std::ostream &;
     HINDSIGHT_API friend auto operator<<(std::wostream &stream, stacktrace_entry entry) -> std::wostream &;
@@ -73,6 +82,7 @@ constexpr auto stacktrace_entry_fmt_string = [] {
                   std::same_as<Char, char16_t> || std::same_as<Char, char32_t>);
 
     using namespace std::string_view_literals;
+    // One character per 4 bits + 2 characters for "0x":
     #define HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(prefix)                                                  \
         if constexpr (is_32bit) {                                                                                      \
             return prefix##"{:#010x}"sv;                                                                               \
@@ -93,6 +103,8 @@ constexpr auto stacktrace_entry_fmt_string = [] {
     #undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
 }();
 
+[[noreturn]] HINDSIGHT_API auto throw_format_error() -> void;
+
 } // namespace detail
 #endif
 
@@ -105,7 +117,7 @@ struct fmt::formatter<hindsight::stacktrace_entry, Char> {
     constexpr auto parse(auto &context) const {
         auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
         if (it != context.end() && *it != Char{'}'}) {
-            throw format_error{"invalid format specification for hindsight::stacktrace_entry"};
+            hindsight::detail::throw_format_error();
         }
         return it;
     }

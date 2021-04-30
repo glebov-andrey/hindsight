@@ -17,9 +17,8 @@
 find_package(fmt REQUIRED)
 
 add_executable(hindsight_print_stacktrace_here)
+target_link_libraries(hindsight_print_stacktrace_here PRIVATE hindsight::default_options hindsight::hindsight)
+target_link_libraries(hindsight_print_stacktrace_here PRIVATE fmt::fmt)
 set_target_clang_tidy(hindsight_print_stacktrace_here)
+
 target_sources(hindsight_print_stacktrace_here PRIVATE print_stacktrace_here.cpp)
-target_link_libraries(hindsight_print_stacktrace_here PRIVATE hindsight fmt::fmt)
-if (HINDSIGHT_ENABLE_CLANG_TIDY)
-    set_target_properties(hindsight_print_stacktrace_here PROPERTIES CXX_CLANG_TIDY ${CLANG_TIDY_PROGRAM})
-endif ()

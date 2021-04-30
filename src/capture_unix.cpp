@@ -16,9 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/stacktrace.hpp>
-
-#include <hindsight/config.hpp>
+#include <hindsight/capture.hpp>
 
 #ifndef HINDSIGHT_OS_WINDOWS
 
@@ -26,10 +24,10 @@
 
 namespace hindsight::detail {
 
-auto capture_stack_trace_from_mutable_context_impl(native_context_type &context,
-                                                   std::size_t entries_to_skip,
-                                                   capture_stack_trace_cb *const callback,
-                                                   void *const user_data) -> void {
+auto capture_stacktrace_from_mutable_context(native_context_type &context,
+                                             std::size_t entries_to_skip,
+                                             capture_stacktrace_cb *const callback,
+                                             void *const user_data) -> void {
     unw_cursor_t cursor;
     if (unw_init_local(&cursor, &context) != 0) {
         return;
@@ -54,23 +52,22 @@ auto capture_stack_trace_from_mutable_context_impl(native_context_type &context,
     } while (unw_step(&cursor) > 0);
 }
 
-auto capture_stack_trace_impl(const std::size_t entries_to_skip,
-                              capture_stack_trace_cb *const callback,
-                              void *const user_data) -> void {
+auto capture_stacktrace(const std::size_t entries_to_skip, capture_stacktrace_cb *const callback, void *const user_data)
+        -> void {
     unw_context_t context;
     if (unw_getcontext(&context) != 0) {
         return;
     }
-    capture_stack_trace_from_mutable_context_impl(context, entries_to_skip, callback, user_data);
+    capture_stacktrace_from_mutable_context(context, entries_to_skip, callback, user_data);
 }
 
 
-auto capture_stack_trace_from_context_impl(const native_context_type &context,
-                                           const std::size_t entries_to_skip,
-                                           capture_stack_trace_cb *const callback,
-                                           void *const user_data) -> void {
+auto capture_stacktrace_from_context(const native_context_type &context,
+                                     const std::size_t entries_to_skip,
+                                     capture_stacktrace_cb *const callback,
+                                     void *const user_data) -> void {
     auto context_copy = context;
-    capture_stack_trace_from_mutable_context_impl(context_copy, entries_to_skip, callback, user_data);
+    capture_stacktrace_from_mutable_context(context_copy, entries_to_skip, callback, user_data);
 }
 
 } // namespace hindsight::detail

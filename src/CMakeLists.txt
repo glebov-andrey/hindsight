@@ -17,11 +17,12 @@
 target_sources(
     hindsight
     PRIVATE # cmake-format: sort
+            capture_unix.cpp
+            capture_windows.cpp
             resolver_backtrace.cpp
             resolver_windows.cpp
+            stacktrace.cpp
             stacktrace_entry.cpp
-            stacktrace_unix.cpp
-            stacktrace_windows.cpp
             util/locked.cpp
             util/locked.hpp)
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")

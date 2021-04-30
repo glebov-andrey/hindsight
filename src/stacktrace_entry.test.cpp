@@ -18,6 +18,7 @@
 
 #include <hindsight/config.hpp>
 
+#include <compare>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -78,6 +79,38 @@ TEST_CASE("default-constructed stacktrace_entry is empty") { REQUIRE(!stacktrace
 
 TEST_CASE("stacktrace_entry stores the native handle unchanged") {
     REQUIRE(stacktrace_entry{from_native_handle, small_uintptr_value}.native_handle() == small_uintptr_value);
+}
+
+TEST_CASE("stacktrace_entry compare the same as their native handles") {
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} ==
+                   stacktrace_entry{from_native_handle, large_uintptr_value});
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} <=
+                   stacktrace_entry{from_native_handle, large_uintptr_value});
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} >=
+                   stacktrace_entry{from_native_handle, large_uintptr_value});
+
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} !=
+                   stacktrace_entry{from_native_handle, small_uintptr_value});
+
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, small_uintptr_value} <
+                   stacktrace_entry{from_native_handle, large_uintptr_value});
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, small_uintptr_value} <=
+                   stacktrace_entry{from_native_handle, large_uintptr_value});
+
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} >
+                   stacktrace_entry{from_native_handle, small_uintptr_value});
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} >=
+                   stacktrace_entry{from_native_handle, small_uintptr_value});
+
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} <=>
+                           stacktrace_entry{from_native_handle, large_uintptr_value} ==
+                   std::strong_ordering::equal);
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, small_uintptr_value} <=>
+                           stacktrace_entry{from_native_handle, large_uintptr_value} ==
+                   std::strong_ordering::less);
+    STATIC_REQUIRE(stacktrace_entry{from_native_handle, large_uintptr_value} <=>
+                           stacktrace_entry{from_native_handle, small_uintptr_value} ==
+                   std::strong_ordering::greater);
 }
 
 TEST_CASE("stacktrace_entry's operator<< produce a hexadecimal number and do not change the stream's state") {

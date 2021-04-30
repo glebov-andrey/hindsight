@@ -37,7 +37,7 @@ namespace {
 auto print_stacktrace_here() {
     using namespace std::string_view_literals;
 
-    const auto entries = hindsight::capture_stack_trace();
+    const auto entries = hindsight::capture_stacktrace();
     fmt::print("Captured {} stacktrace entries\n"sv, entries.size());
 
     auto resolver = hindsight::resolver{};

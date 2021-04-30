@@ -14,10 +14,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-target_sources(
-    hindsight
-    PRIVATE # cmake-format: sort
-            hindsight/config.hpp
-            hindsight/resolver.hpp
-            hindsight/stacktrace.hpp
-            hindsight/stacktrace_entry.hpp)
+set(HINDSIGHT_PUBLIC_HEADERS
+    # cmake-format: sort
+    hindsight/config.hpp
+    hindsight/resolver.hpp
+    hindsight/stacktrace.hpp
+    hindsight/stacktrace_entry.hpp
+    PARENT_SCOPE)
+
+target_sources(hindsight PRIVATE ${HINDSIGHT_PUBLIC_HEADERS})
