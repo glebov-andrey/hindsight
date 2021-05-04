@@ -34,7 +34,7 @@ namespace {
     #elif defined _M_ARM || defined _M_ARM64
     return context.Pc;
     #else
-        #error get_instruction_ptr is not implemented for this architecture.
+        #error get_instruction_ptr is not implemented for this architecture
     #endif
 }
 
@@ -89,10 +89,10 @@ auto capture_stacktrace(const std::size_t entries_to_skip, capture_stacktrace_cb
     capture_stacktrace_from_mutable_context(context, entries_to_skip, callback, user_data);
 }
 
-auto capture_stacktrace_from_context_impl(const native_context_type &context,
-                                          const std::size_t entries_to_skip,
-                                          capture_stacktrace_cb *const callback,
-                                          void *const user_data) -> void {
+auto capture_stacktrace_from_context(const native_context_type &context,
+                                     const std::size_t entries_to_skip,
+                                     capture_stacktrace_cb *const callback,
+                                     void *const user_data) -> void {
     auto context_copy = context;
     capture_stacktrace_from_mutable_context(context_copy, entries_to_skip, callback, user_data);
 }

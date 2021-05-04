@@ -58,6 +58,12 @@
     #define HINDSIGHT_PRAGMA_CLANG(str)
 #endif
 
+#if defined __GNUC__ && !defined __clang__
+    #define HINDSIGHT_PRAGMA_GCC(str) _Pragma(str)
+#else
+    #define HINDSIGHT_PRAGMA_GCC(str)
+#endif
+
 #if defined _MSC_VER && !defined __clang__
     #define HINDSIGHT_PRAGMA_MSVC(str) _Pragma(str)
 #else

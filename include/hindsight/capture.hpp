@@ -73,7 +73,10 @@ template<std::invocable<std::size_t, capture_stacktrace_cb *, void *> ImplFuncti
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
     if (first == last) {
         if constexpr (std::forward_iterator<It>) {
+            HINDSIGHT_PRAGMA_GCC("GCC diagnostic push") // NRVO can't happen because 'first' is a function parameter
+            HINDSIGHT_PRAGMA_GCC("GCC diagnostic ignored \"-Wredundant-move\"")
             return std::move(first);
+            HINDSIGHT_PRAGMA_GCC("GCC diagnostic pop")
         } else {
             return;
         }
@@ -135,6 +138,21 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
             entries_to_skip);
 }
 
+template<std::ranges::output_range<stacktrace_entry> Range>
+[[nodiscard]] auto capture_stacktrace_from_context(const native_context_type &context,
+                                                   Range &&range,
+                                                   const std::size_t entries_to_skip = 0) {
+    if constexpr (std::ranges::forward_range<Range>) {
+        return std::ranges::borrowed_subrange_t<Range>{std::ranges::begin(range),
+                                                       capture_stacktrace_from_context(context,
+                                                                                       std::ranges::begin(range),
+                                                                                       std::ranges::end(range),
+                                                                                       entries_to_skip)};
+    } else {
+        capture_stacktrace_from_context(context, std::ranges::begin(range), std::ranges::end(range), entries_to_skip);
+    }
+}
+
 template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
 [[nodiscard]] auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                                            It first,
@@ -146,6 +164,25 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
             std::move(first),
             std::move(last),
             entries_to_skip);
+}
+
+template<std::ranges::output_range<stacktrace_entry> Range>
+[[nodiscard]] auto capture_stacktrace_from_mutable_context(native_context_type &context,
+                                                           Range &&range,
+                                                           const std::size_t entries_to_skip = 0) {
+    if constexpr (std::ranges::forward_range<Range>) {
+        return std::ranges::borrowed_subrange_t<Range>{
+                std::ranges::begin(range),
+                capture_stacktrace_from_mutable_context(context,
+                                                        std::ranges::begin(range),
+                                                        std::ranges::end(range),
+                                                        entries_to_skip)};
+    } else {
+        capture_stacktrace_from_mutable_context(context,
+                                                std::ranges::begin(range),
+                                                std::ranges::end(range),
+                                                entries_to_skip);
+    }
 }
 
 } // namespace hindsight
