@@ -28,11 +28,12 @@ namespace {
 template<typename Char>
 [[nodiscard]] auto format_entry(std::basic_ostream<Char> &stream, const stacktrace_entry entry)
         -> std::basic_ostream<Char> & {
-    static constexpr auto width = std::numeric_limits<stacktrace_entry::native_handle_type>::digits / 4;
+    static constexpr auto width = std::numeric_limits<stacktrace_entry::native_handle_type>::digits / 4 + 2;
 
     const auto prev_format_flags = stream.flags();
     const auto prev_fill_char = stream.fill();
-    stream << std::hex << std::showbase << std::setw(width) << std::setfill(Char{'0'}) << entry.native_handle();
+    stream << std::hex << std::showbase << std::internal << std::setw(width) << std::setfill(Char{'0'})
+           << entry.native_handle();
     stream.fill(prev_fill_char);
     stream.flags(prev_format_flags);
     return stream;

@@ -24,7 +24,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(hindsight_default_options INTERFACE -W4)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
     target_compile_options(hindsight_default_options INTERFACE -W4 -Wpedantic)
-else (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(hindsight_default_options INTERFACE -Wall -Wextra -Wpedantic)
 endif ()
 

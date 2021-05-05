@@ -113,7 +113,7 @@ TEST_CASE("stacktrace_entry compare the same as their native handles") {
                    std::strong_ordering::greater);
 }
 
-TEST_CASE("stacktrace_entry's operator<< produce a hexadecimal number and do not change the stream's state") {
+TEST_CASE("stacktrace_entry's operator<< produces a hexadecimal number and does not change the stream's state") {
     constexpr auto entry = stacktrace_entry{from_native_handle, large_uintptr_value};
     {
         auto stream = std::stringstream{};
@@ -124,6 +124,20 @@ TEST_CASE("stacktrace_entry's operator<< produce a hexadecimal number and do not
         auto stream = std::wstringstream{};
         stream << std::setfill(L'*') << std::setw(4) << 42 << entry << 42 << std::setw(4) << 42;
         REQUIRE(stream.str() == std::wstring{L"**42"} + large_uintptr_wstring + L"42**42");
+    }
+}
+
+TEST_CASE("stacktrace_entry's operator<< adds zero-padding and does not change the stream's state") {
+    constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
+    {
+        auto stream = std::stringstream{};
+        stream << std::setfill('*') << std::setw(4) << 42 << entry << 42 << std::setw(4) << 42;
+        REQUIRE(stream.str() == std::string{"**42"} + small_uintptr_string + "42**42");
+    }
+    {
+        auto stream = std::wstringstream{};
+        stream << std::setfill(L'*') << std::setw(4) << 42 << entry << 42 << std::setw(4) << 42;
+        REQUIRE(stream.str() == std::wstring{L"**42"} + small_uintptr_wstring + L"42**42");
     }
 }
 
