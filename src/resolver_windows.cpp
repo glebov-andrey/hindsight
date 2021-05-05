@@ -19,24 +19,17 @@
 #include <hindsight/config.hpp>
 
 #ifdef HINDSIGHT_OS_WINDOWS
-
-    #include <hindsight/resolver.hpp>
+    #include "resolver_windows_impl.hpp"
 
     #include <concepts>
     #include <tuple>
-    #include <unordered_map>
 
-    #include <Windows.h>
-    // Windows.h must be included before other headers
-    #include <dia2.h>
+    #include <Windows.h> // Windows.h must be included before diacreate.h
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wlanguage-extension-token\"") // __wchar_t used in diacreate.h
     #include <diacreate.h>
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
 
-    #include "util/locked.hpp"
-
-    #include "windows/com.hpp"
     #include "windows/encoding.hpp"
     #include "windows/module_info.hpp"
 
@@ -157,98 +150,90 @@ auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
 }
 
 
-class resolver::impl {
-public:
-    [[nodiscard]] auto session_for_entry(const stacktrace_entry entry) {
-        const auto module_info = windows::get_module_info_by_address(entry.native_handle());
-        return m_sessions.with_lock([&](session_map &sessions) -> windows::com_ptr<IDiaSession> {
-            auto [it, inserted] = sessions.try_emplace(module_info.file_path);
-            if (!inserted) {
-                return it->second;
-            }
+auto resolver::impl::resolve(const stacktrace_entry entry, resolve_cb *const callback, void *const user_data) -> void {
+    const auto on_failure = [&] { callback({entry, false, {}}, user_data); };
 
-            auto dia_data_source = windows::com_ptr<IDiaDataSource>{};
-            {
-                void *dia_data_source_void = nullptr;
-                // TODO: Detect the correct DLL name in FindDIA.cmake
-                if (const auto result =
-                            NoRegCoCreate(L"msdia140.dll", CLSID_DiaSource, IID_IDiaDataSource, &dia_data_source_void);
-                    FAILED(result) || !dia_data_source_void) {
-                    return nullptr;
-                }
-                dia_data_source.reset(static_cast<IDiaDataSource *>(dia_data_source_void));
-            }
-            if (const auto result =
-                        dia_data_source->loadDataForExe(module_info.file_path.c_str(),
-                                                        nullptr, // TODO: Allow the user to specify a custom search path
-                                                        nullptr);
-                FAILED(result)) {
-                return nullptr;
-            }
-            if (const auto result = dia_data_source->openSession(&it->second); FAILED(result)) {
-                return nullptr;
-            }
-            if (const auto result = it->second->put_loadAddress(module_info.base_offset); FAILED(result)) {
-                return nullptr;
-            }
-            return it->second;
-        });
+    auto session = session_for_entry(entry);
+    if (!session) {
+        on_failure();
+        return;
     }
 
-    auto resolve(const stacktrace_entry entry, resolve_cb *const callback, void *const user_data) -> void {
-        const auto on_failure = [&] { callback({entry, false, {}}, user_data); };
-
-        auto session = session_for_entry(entry);
-        if (!session) {
-            on_failure();
-            return;
+    auto root_symbol = windows::com_ptr<IDiaSymbol>{};
+    for (const auto symbol_type : {SymTagFunction, SymTagPublicSymbol}) {
+        if (const auto result = session->findSymbolByVAEx(entry.native_handle(), symbol_type, &root_symbol, nullptr);
+            SUCCEEDED(result) && root_symbol) {
+            break;
         }
+    }
+    if (!root_symbol) {
+        on_failure();
+        return;
+    }
 
-        auto root_symbol = windows::com_ptr<IDiaSymbol>{};
-        for (const auto symbol_type : {SymTagFunction, SymTagPublicSymbol}) {
-            if (const auto result =
-                        session->findSymbolByVAEx(entry.native_handle(), symbol_type, &root_symbol, nullptr);
-                SUCCEEDED(result) && root_symbol) {
-                break;
-            }
-        }
-        if (!root_symbol) {
-            on_failure();
-            return;
-        }
-
-        const auto done = [&] {
-            auto inline_symbols = windows::com_ptr<IDiaEnumSymbols>{};
-            if (const auto result = root_symbol->findInlineFramesByVA(entry.native_handle(), &inline_symbols);
-                FAILED(result) || !inline_symbols) {
-                return false;
-            }
-            auto inline_symbol_count = LONG{};
-            if (const auto result = inline_symbols->get_Count(&inline_symbol_count); FAILED(result)) {
-                return false;
-            }
-            for (auto inline_idx = LONG{}; inline_idx != inline_symbol_count; ++inline_idx) {
-                auto inline_symbol = windows::com_ptr<IDiaSymbol>{};
-                if (const auto result = inline_symbols->Item(inline_idx, &inline_symbol);
-                    SUCCEEDED(result) && inline_symbol) {
-                    if (callback({entry, true, {session, std::move(inline_symbol)}}, user_data)) {
-                        return true;
-                    }
-                }
-            }
+    const auto done = [&] {
+        auto inline_symbols = windows::com_ptr<IDiaEnumSymbols>{};
+        if (const auto result = root_symbol->findInlineFramesByVA(entry.native_handle(), &inline_symbols);
+            FAILED(result) || !inline_symbols) {
             return false;
-        }();
-        if (done) {
-            return;
         }
-
-        callback({entry, false, {std::move(session), std::move(root_symbol)}}, user_data);
+        auto inline_symbol_count = LONG{};
+        if (const auto result = inline_symbols->get_Count(&inline_symbol_count); FAILED(result)) {
+            return false;
+        }
+        for (auto inline_idx = LONG{}; inline_idx != inline_symbol_count; ++inline_idx) {
+            auto inline_symbol = windows::com_ptr<IDiaSymbol>{};
+            if (const auto result = inline_symbols->Item(inline_idx, &inline_symbol);
+                SUCCEEDED(result) && inline_symbol) {
+                if (callback({entry, true, {session, std::move(inline_symbol)}}, user_data)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }();
+    if (done) {
+        return;
     }
 
-private:
-    using session_map = std::unordered_map<std::wstring, windows::com_ptr<IDiaSession>>;
-    util::locked<session_map> m_sessions{};
-};
+    callback({entry, false, {std::move(session), std::move(root_symbol)}}, user_data);
+}
+
+auto resolver::impl::session_for_entry(const stacktrace_entry entry) -> windows::com_ptr<IDiaSession> {
+    const auto module_info = windows::get_module_info_by_address(entry.native_handle());
+    return m_sessions.with_lock([&](session_map &sessions) -> windows::com_ptr<IDiaSession> {
+        auto [it, inserted] = sessions.try_emplace(module_info.file_path);
+        if (!inserted) {
+            return it->second;
+        }
+
+        auto dia_data_source = windows::com_ptr<IDiaDataSource>{};
+        {
+            void *dia_data_source_void = nullptr;
+            // TODO: Detect the correct DLL name in FindDIA.cmake
+            if (const auto result =
+                        NoRegCoCreate(L"msdia140.dll", CLSID_DiaSource, IID_IDiaDataSource, &dia_data_source_void);
+                FAILED(result) || !dia_data_source_void) {
+                return nullptr;
+            }
+            dia_data_source.reset(static_cast<IDiaDataSource *>(dia_data_source_void));
+        }
+        if (const auto result =
+                    dia_data_source->loadDataForExe(module_info.file_path.c_str(),
+                                                    nullptr, // TODO: Allow the user to specify a custom search path
+                                                    nullptr);
+            FAILED(result)) {
+            return nullptr;
+        }
+        if (const auto result = dia_data_source->openSession(&it->second); FAILED(result)) {
+            return nullptr;
+        }
+        if (const auto result = it->second->put_loadAddress(module_info.base_offset); FAILED(result)) {
+            return nullptr;
+        }
+        return it->second;
+    });
+}
 
 
 resolver::resolver() : m_impl{std::make_unique<impl>()} {}

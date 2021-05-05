@@ -21,6 +21,8 @@ target_sources(
             capture_windows.cpp
             resolver_backtrace.cpp
             resolver_windows.cpp
+            resolver_windows_impl.hpp
+            simple.cpp
             stacktrace.cpp
             stacktrace_entry.cpp
             util/locked.cpp
