@@ -44,6 +44,7 @@ if (HINDSIGHT_BUILD_TESTS)
         hindsight_tests
         PRIVATE # cmake-format: sort
                 capture.test.cpp
+                capture_signal.test.cpp
                 stacktrace_entry.test.cpp
                 util/locked.test.cpp)
 endif ()

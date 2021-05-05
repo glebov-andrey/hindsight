@@ -54,13 +54,15 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                              std::size_t entries_to_skip,
                                              capture_stacktrace_cb *const callback,
                                              void *const user_data) -> void {
-    while (get_instruction_ptr(context) != 0) {
-        if (entries_to_skip == 0) {
-            if (callback({from_native_handle, get_instruction_ptr(context) - 1}, user_data)) {
-                break;
+    do {
+        if (get_instruction_ptr(context)) {
+            if (entries_to_skip == 0) {
+                if (callback({from_native_handle, get_instruction_ptr(context) - 1}, user_data)) {
+                    break;
+                }
+            } else {
+                --entries_to_skip;
             }
-        } else {
-            --entries_to_skip;
         }
 
         auto image_base = ULONG_PTR{};
@@ -79,7 +81,7 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
         } else {
             skip_leaf_function(context);
         }
-    }
+    } while (get_instruction_ptr(context) != 0);
 }
 
 auto capture_stacktrace(const std::size_t entries_to_skip, capture_stacktrace_cb *const callback, void *const user_data)

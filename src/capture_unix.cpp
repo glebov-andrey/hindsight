@@ -35,7 +35,7 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
 
     do {
         auto instruction_ptr = unw_word_t{};
-        if (unw_get_reg(&cursor, UNW_REG_IP, &instruction_ptr) == 0) {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &instruction_ptr) == 0 && instruction_ptr != 0) {
             if (entries_to_skip != 0) {
                 --entries_to_skip;
                 continue;
