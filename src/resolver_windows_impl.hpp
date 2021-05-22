@@ -25,19 +25,30 @@
     #include <hindsight/resolver.hpp>
 
     #include <unordered_map>
+    #include <utility>
+    #include <variant>
 
     #include <dia2.h>
 
     #include "util/locked.hpp"
+
     #include "windows/com.hpp"
+    #include "windows/module_map.hpp"
 
 namespace hindsight {
 
 class resolver::impl {
 public:
+    explicit impl() = default;
+
+    explicit impl(const HANDLE process) noexcept
+            : m_module_map{std::in_place_type<windows::remote_module_map>, process} {}
+
     auto resolve(stacktrace_entry entry, resolve_cb *callback, void *user_data) -> void;
 
 private:
+    std::variant<windows::local_module_map, windows::remote_module_map> m_module_map{};
+
     using session_map = std::unordered_map<std::wstring, windows::com_ptr<IDiaSession>>;
     util::locked<session_map> m_sessions{};
 

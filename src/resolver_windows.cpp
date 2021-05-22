@@ -21,17 +21,14 @@
 #ifdef HINDSIGHT_OS_WINDOWS
     #include "resolver_windows_impl.hpp"
 
-    #include <concepts>
-    #include <tuple>
-
-    #include <Windows.h> // Windows.h must be included before diacreate.h
+    #include <Windows.h>
+// Windows.h must be included before diacreate.h
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wlanguage-extension-token\"") // __wchar_t used in diacreate.h
     #include <diacreate.h>
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
 
     #include "windows/encoding.hpp"
-    #include "windows/module_info.hpp"
 
 namespace hindsight {
 
@@ -99,7 +96,7 @@ namespace {
 [[nodiscard]] auto source_impl(const stacktrace_entry physical,
                                const bool is_inline,
                                const logical_stacktrace_entry::impl_payload &impl)
-        -> std::tuple<windows::bstr, std::uint_least32_t> {
+        -> std::pair<windows::bstr, std::uint_least32_t> {
     if (!impl.symbol) {
         return {};
     }
@@ -200,9 +197,12 @@ auto resolver::impl::resolve(const stacktrace_entry entry, resolve_cb *const cal
 }
 
 auto resolver::impl::session_for_entry(const stacktrace_entry entry) -> windows::com_ptr<IDiaSession> {
-    const auto module_info = windows::get_module_info_by_address(entry.native_handle());
+    const auto module_info = std::visit([&](auto &module_map) { return module_map.lookup(entry); }, m_module_map);
+    if (!module_info) {
+        return nullptr;
+    }
     return m_sessions.with_lock([&](session_map &sessions) -> windows::com_ptr<IDiaSession> {
-        auto [it, inserted] = sessions.try_emplace(module_info.file_path);
+        auto [it, inserted] = sessions.try_emplace(module_info->file_name);
         if (!inserted) {
             return it->second;
         }
@@ -218,17 +218,15 @@ auto resolver::impl::session_for_entry(const stacktrace_entry entry) -> windows:
             }
             dia_data_source.reset(static_cast<IDiaDataSource *>(dia_data_source_void));
         }
-        if (const auto result =
-                    dia_data_source->loadDataForExe(module_info.file_path.c_str(),
-                                                    nullptr, // TODO: Allow the user to specify a custom search path
-                                                    nullptr);
+        // TODO: Allow the user to specify a custom search path
+        if (const auto result = dia_data_source->loadDataForExe(module_info->file_name.c_str(), nullptr, nullptr);
             FAILED(result)) {
             return nullptr;
         }
         if (const auto result = dia_data_source->openSession(&it->second); FAILED(result)) {
             return nullptr;
         }
-        if (const auto result = it->second->put_loadAddress(module_info.base_offset); FAILED(result)) {
+        if (const auto result = it->second->put_loadAddress(module_info->base_offset); FAILED(result)) {
             return nullptr;
         }
         return it->second;
@@ -237,6 +235,8 @@ auto resolver::impl::session_for_entry(const stacktrace_entry entry) -> windows:
 
 
 resolver::resolver() : m_impl{std::make_unique<impl>()} {}
+
+resolver::resolver(const HANDLE process) : m_impl{std::make_unique<impl>(process)} {}
 
 resolver::~resolver() = default;
 

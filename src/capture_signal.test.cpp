@@ -94,9 +94,9 @@ auto reset_signal_stacktrace() noexcept {
 }
 
 #ifdef HINDSIGHT_OS_WINDOWS
-    #define HINDSIGHT_TEST_GET_CONTEXT(context) RtlCaptureContext(&(context))
+    #define HINDSIGHT_TESTS_GET_CONTEXT(context) RtlCaptureContext(&(context))
 #else
-    #define HINDSIGHT_TEST_GET_CONTEXT(context) getcontext(&(context))
+    #define HINDSIGHT_TESTS_GET_CONTEXT(context) getcontext(&(context))
 #endif
 
 auto raise_access_violation() {
@@ -114,7 +114,7 @@ auto raise_access_violation() {
 template<bool TryExecute>
 auto cause_access_violation() {
     do_violation = true;
-    HINDSIGHT_TEST_GET_CONTEXT(pre_violation_context);
+    HINDSIGHT_TESTS_GET_CONTEXT(pre_violation_context);
     std::atomic_signal_fence(std::memory_order::acquire); // synchronize with a signal handler that clears do_violation
 
     if (do_violation) {

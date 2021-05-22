@@ -36,6 +36,7 @@ Checks: >
   google-runtime-operator,
   hicpp-*,
   misc-*,
+  -misc-misplaced-const,
   modernize-*,
   -modernize-avoid-c-arrays,
   performance-*,

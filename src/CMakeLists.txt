@@ -35,8 +35,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
                 windows/com.hpp
                 windows/encoding.cpp
                 windows/encoding.hpp
-                windows/module_info.cpp
-                windows/module_info.hpp)
+                windows/module_map.cpp
+                windows/module_map.hpp)
 endif ()
 
 if (HINDSIGHT_BUILD_TESTS)

@@ -35,6 +35,10 @@
 
 #include <hindsight/stacktrace.hpp>
 
+#ifdef HINDSIGHT_OS_WINDOWS
+using HANDLE = void *;
+#endif
+
 namespace hindsight {
 
 template<typename Char>
@@ -94,7 +98,7 @@ public:
                                                   bool is_inline,
                                                   std::string &&symbol,
                                                   source_location &&source) noexcept;
-    HINDSIGHT_API_HIDDEN auto set_inline(impl_tag && /* impl */) noexcept -> void;
+    HINDSIGHT_API_HIDDEN auto set_inline(impl_tag &&impl) noexcept -> void;
 #endif
 
 private:
@@ -138,6 +142,10 @@ inline auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noex
 class HINDSIGHT_API resolver {
 public:
     explicit resolver();
+
+#ifdef HINDSIGHT_OS_WINDOWS
+    explicit resolver(HANDLE process);
+#endif
 
     resolver(const resolver &other) = delete;
 

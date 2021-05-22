@@ -16,21 +16,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef HINDSIGHT_SRC_WINDOWS_MODULE_INFO_HPP
-#define HINDSIGHT_SRC_WINDOWS_MODULE_INFO_HPP
+#ifndef HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
+#define HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 
 #include <cstdint>
+#include <optional>
 #include <string>
+
+#include <Windows.h>
+
+#include <hindsight/stacktrace_entry.hpp>
 
 namespace hindsight::windows {
 
 struct module_info {
-    std::wstring file_path;
     std::uintptr_t base_offset;
+    std::wstring file_name;
 };
 
-[[nodiscard]] auto get_module_info_by_address(std::uintptr_t address) -> module_info;
+class local_module_map {
+public:
+    [[nodiscard]] auto lookup(stacktrace_entry entry) const -> std::optional<module_info>;
+};
+
+class remote_module_map {
+public:
+    [[nodiscard]] explicit remote_module_map(const HANDLE process) noexcept : m_process{process} {}
+
+    [[nodiscard]] auto lookup(stacktrace_entry entry) const -> std::optional<module_info>;
+
+private:
+    HANDLE m_process;
+};
 
 } // namespace hindsight::windows
 
-#endif // HINDSIGHT_SRC_WINDOWS_MODULE_INFO_HPP
+#endif // HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP

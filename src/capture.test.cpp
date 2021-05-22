@@ -40,9 +40,9 @@ namespace hindsight {
 // capture_stacktrace_from_* is called then the trace will be incorrect (include the current location of the call to
 // capture_stacktrace_from_*). As a result we must make sure that RtlCaptureContext/getcontext is called inline.
 #ifdef HINDSIGHT_OS_WINDOWS
-    #define HINDSIGHT_TEST_GET_CONTEXT(context) RtlCaptureContext(&(context))
+    #define HINDSIGHT_TESTS_GET_CONTEXT(context) RtlCaptureContext(&(context))
 #else
-    #define HINDSIGHT_TEST_GET_CONTEXT(context) getcontext(&(context))
+    #define HINDSIGHT_TESTS_GET_CONTEXT(context) getcontext(&(context))
 #endif
 
 namespace {
@@ -60,14 +60,14 @@ constexpr auto easily_reachable_sentinel = easily_reachable_sentinel_t{};
     // These bugs are related: https://bugs.llvm.org/show_bug.cgi?id=47509,
     // https://bugs.llvm.org/show_bug.cgi?id=46746, https://gcc.gnu.org/bugzilla/show_bug.cgi?id=97120.
     #pragma message "Standard range views are broken with Clang and libstdc++. Disabling some tests."
-    #define HINDSIGHT_TEST_DISABLE_RANGE_VIEW_TESTS
+    #define HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
 #endif
 
 } // namespace
 
 TEST_CASE("capture_stacktrace_from_mutable_context captures at least one entry for a local context") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto entries = std::vector<stacktrace_entry>{};
     STATIC_REQUIRE(std::same_as<decltype(capture_stacktrace_from_mutable_context(context,
                                                                                  std::back_inserter(entries),
@@ -80,7 +80,7 @@ TEST_CASE("capture_stacktrace_from_mutable_context captures at least one entry f
 
 TEST_CASE("capture_stacktrace_from_mutable_context skips entries_to_skip first entries") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto all_entries = std::vector<stacktrace_entry>{};
     {
         auto tmp_context = context;
@@ -96,7 +96,7 @@ TEST_CASE("capture_stacktrace_from_mutable_context skips entries_to_skip first e
 
 TEST_CASE("capture_stacktrace_from_mutable_context can capture into an empty output range (iterator + sentinel)") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto entries = std::vector<stacktrace_entry>{};
     STATIC_REQUIRE(std::same_as<decltype(capture_stacktrace_from_mutable_context(context,
                                                                                  std::back_inserter(entries),
@@ -108,7 +108,7 @@ TEST_CASE("capture_stacktrace_from_mutable_context can capture into an empty out
 
 TEST_CASE("capture_stacktrace_from_mutable_context can capture into an empty forward range (iterator + sentinel)") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto entries = std::forward_list<stacktrace_entry>{};
     STATIC_REQUIRE(
             std::same_as<decltype(capture_stacktrace_from_mutable_context(context, entries.begin(), entries.end())),
@@ -120,7 +120,7 @@ TEST_CASE("capture_stacktrace_from_mutable_context can capture into an empty for
 
 TEST_CASE("capture_stacktrace_from_mutable_context stops capturing when the range is full") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto all_entries = std::vector<stacktrace_entry>{};
     {
         auto tmp_context = context;
@@ -142,9 +142,9 @@ TEST_CASE("capture_stacktrace_from_mutable_context stops capturing when the rang
 
 TEST_CASE("capture_stacktrace_from_mutable_context captures entries into ranges (range)") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
 
-#ifndef HINDSIGHT_TEST_DISABLE_RANGE_VIEW_TESTS
+#ifndef HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
     auto all_entries = std::vector<stacktrace_entry>{};
     {
         auto tmp_context = context;
@@ -224,7 +224,7 @@ TEST_CASE("capture_stacktrace stops capturing when the range is full") {
 }
 
 TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
-#ifndef HINDSIGHT_TEST_DISABLE_RANGE_VIEW_TESTS
+#ifndef HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
     {
         auto entries = std::vector<stacktrace_entry>{};
         const auto out_range = std::ranges::subrange{std::back_inserter(entries), std::unreachable_sentinel};
@@ -253,7 +253,7 @@ TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
 
 TEST_CASE("capture_stacktrace_from_context captures at least one entry for a local context") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto entries = std::vector<stacktrace_entry>{};
     STATIC_REQUIRE(std::same_as<decltype(capture_stacktrace_from_context(context,
                                                                          std::back_inserter(entries),
@@ -266,7 +266,7 @@ TEST_CASE("capture_stacktrace_from_context captures at least one entry for a loc
 
 TEST_CASE("capture_stacktrace_from_context skips entries_to_skip first entries") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto all_entries = std::vector<stacktrace_entry>{};
     capture_stacktrace_from_context(context, std::back_inserter(all_entries), std::unreachable_sentinel);
     auto less_entries = std::vector<stacktrace_entry>{};
@@ -277,7 +277,7 @@ TEST_CASE("capture_stacktrace_from_context skips entries_to_skip first entries")
 
 TEST_CASE("capture_stacktrace_from_context can capture into an empty output range (iterator + sentinel)") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto entries = std::vector<stacktrace_entry>{};
     STATIC_REQUIRE(std::same_as<decltype(capture_stacktrace_from_context(context,
                                                                          std::back_inserter(entries),
@@ -289,7 +289,7 @@ TEST_CASE("capture_stacktrace_from_context can capture into an empty output rang
 
 TEST_CASE("capture_stacktrace_from_context can capture into an empty forward range (iterator + sentinel)") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto entries = std::forward_list<stacktrace_entry>{};
     STATIC_REQUIRE(std::same_as<decltype(capture_stacktrace_from_context(context, entries.begin(), entries.end())),
                                 decltype(entries.begin())>);
@@ -300,7 +300,7 @@ TEST_CASE("capture_stacktrace_from_context can capture into an empty forward ran
 
 TEST_CASE("capture_stacktrace_from_context stops capturing when the range is full") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
     auto all_entries = std::vector<stacktrace_entry>{};
     capture_stacktrace_from_context(context, std::back_inserter(all_entries), std::unreachable_sentinel);
     REQUIRE(!all_entries.empty());
@@ -316,9 +316,9 @@ TEST_CASE("capture_stacktrace_from_context stops capturing when the range is ful
 
 TEST_CASE("capture_stacktrace_from_context captures entries info ranges (range)") {
     native_context_type context;
-    HINDSIGHT_TEST_GET_CONTEXT(context);
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
 
-#ifndef HINDSIGHT_TEST_DISABLE_RANGE_VIEW_TESTS
+#ifndef HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
     auto all_entries = std::vector<stacktrace_entry>{};
     {
         const auto out_range = std::ranges::subrange{std::back_inserter(all_entries), std::unreachable_sentinel};
