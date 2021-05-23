@@ -28,6 +28,15 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL
     target_compile_options(hindsight_default_options INTERFACE -Wall -Wextra -Wpedantic)
 endif ()
 
+if (HINDSIGHT_ENABLE_LLD_THINLTO_CACHE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(THINLTO_CACHE_DIR "${CMAKE_BINARY_DIR}/thinlto-cache")
+    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_link_options(hindsight_default_options INTERFACE -lldltocache:${THINLTO_CACHE_DIR})
+    else ()
+        target_link_options(hindsight_default_options INTERFACE -Wl,--thinlto-cache-dir=${THINLTO_CACHE_DIR})
+    endif ()
+endif ()
+
 add_library(hindsight::default_options ALIAS hindsight_default_options)
 
 function (fix_static_pdb_name TARGET_NAME)

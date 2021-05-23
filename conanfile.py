@@ -36,7 +36,9 @@ class HindsightConan(ConanFile):
         "build_tests": [False, True],
         "build_examples": [False, True],
         "build_docs": [False, True],
+        "enable_coverage": [False, True],
         "enable_clang_tidy": [False, True],
+        "enable_lld_thinlto_cache": [False, True],
     }
     default_options = {
         "shared": False,
@@ -45,7 +47,9 @@ class HindsightConan(ConanFile):
         "build_tests": False,
         "build_examples": False,
         "build_docs": False,
+        "enable_coverage": False,
         "enable_clang_tidy": False,
+        "enable_lld_thinlto_cache": False,
 
         "libunwind:coredump": False,
         "libunwind:ptrace": False,
@@ -80,7 +84,9 @@ class HindsightConan(ConanFile):
         cmake.definitions["HINDSIGHT_BUILD_TESTS"] = self.options.build_tests
         cmake.definitions["HINDSIGHT_BUILD_EXAMPLES"] = self.options.build_examples
         cmake.definitions["HINDSIGHT_BUILD_DOCS"] = self.options.build_docs
+        cmake.definitions["HINDSIGHT_ENABLE_COVERAGE"] = self.options.enable_coverage
         cmake.definitions["HINDSIGHT_ENABLE_CLANG_TIDY"] = self.options.enable_clang_tidy
+        cmake.definitions["HINDSIGHT_ENABLE_LLD_THINLTO_CACHE"] = self.options.enable_lld_thinlto_cache
         cmake.configure()
         return cmake
 
@@ -110,3 +116,4 @@ class HindsightConan(ConanFile):
         del self.info.options.build_examples
         del self.info.options.build_docs
         del self.info.options.enable_clang_tidy
+        del self.info.options.enable_lld_thinlto_cache

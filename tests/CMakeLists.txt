@@ -17,7 +17,8 @@
 find_package(Catch2 REQUIRED)
 
 add_executable(hindsight_tests)
-target_link_libraries(hindsight_tests PRIVATE hindsight::default_options hindsight::hindsight)
+target_link_libraries(
+    hindsight_tests PRIVATE hindsight::default_options hindsight::coverage_options hindsight::hindsight)
 target_link_libraries(hindsight_tests PRIVATE Catch2::Catch2)
 target_sources(hindsight_tests PRIVATE main.cpp)
 
