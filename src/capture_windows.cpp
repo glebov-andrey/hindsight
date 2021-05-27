@@ -40,8 +40,10 @@ namespace {
 
 auto skip_leaf_function(CONTEXT &context) noexcept {
     #ifdef _M_AMD64
+    // Making the load from `*Rsp` volatile because the memory it references doesn't really exist in the abstract
+    // machine, and so the compiler cant reason about it.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
-    context.Rip = *reinterpret_cast<const std::uintptr_t *>(context.Rsp);
+    context.Rip = *reinterpret_cast<const volatile std::uintptr_t *>(context.Rsp);
     context.Rsp += sizeof(std::uintptr_t);
     #else
         #error skip_leaf_function is not implemented for this architecture

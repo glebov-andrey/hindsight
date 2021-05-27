@@ -35,7 +35,8 @@ template<typename CharT>
     if constexpr (std::same_as<CharT, char>) {
         return ptr;
     } else {
-        return reinterpret_cast<char *>(ptr); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): safe because `char *` can alias anything
+        return reinterpret_cast<char *>(ptr);
     }
 }
 

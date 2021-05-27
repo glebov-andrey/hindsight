@@ -109,15 +109,8 @@ private:
     static constexpr auto impl_payload_size = sizeof(void *) * 2;
     std::array<std::byte, impl_payload_size> m_impl_storage;
 
-    HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() const noexcept -> const impl_payload & {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        return *reinterpret_cast<const impl_payload *>(m_impl_storage.data());
-    }
-
-    HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() noexcept -> impl_payload & {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        return *reinterpret_cast<impl_payload *>(m_impl_storage.data());
-    }
+    HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() const noexcept -> const impl_payload &;
+    HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() noexcept -> impl_payload &;
 #else
     std::string m_symbol{};
     source_location m_source{};

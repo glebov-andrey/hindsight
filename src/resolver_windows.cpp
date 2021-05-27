@@ -21,6 +21,8 @@
 #ifdef HINDSIGHT_OS_WINDOWS
     #include "resolver_windows_impl.hpp"
 
+    #include <new>
+
     #include <Windows.h>
 // Windows.h must be included before diacreate.h
 HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
@@ -38,12 +40,14 @@ struct logical_stacktrace_entry::impl_payload {
 };
 
 
-logical_stacktrace_entry::logical_stacktrace_entry() noexcept { // NOLINT(hicpp-member-init)
+// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
+logical_stacktrace_entry::logical_stacktrace_entry() noexcept {
     static_assert(sizeof(impl_payload) == impl_payload_size);
     new (static_cast<void *>(m_impl_storage.data())) impl_payload{};
 }
 
-logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical, // NOLINT(hicpp-member-init)
+// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
+logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
                                                    const bool is_inline,
                                                    impl_payload &&impl) noexcept
         : m_physical{physical},
@@ -51,13 +55,14 @@ logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physic
     new (static_cast<void *>(m_impl_storage.data())) impl_payload{std::move(impl)};
 }
 
-logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other) // NOLINT(hicpp-member-init)
+// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
+logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other)
         : m_physical{other.m_physical},
           m_is_inline{other.m_is_inline} {
     new (static_cast<void *>(m_impl_storage.data())) impl_payload(other.impl());
 }
 
-// NOLINTNEXTLINE(hicpp-member-init)
+// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
 logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry &&other) noexcept
         : m_physical{std::exchange(other.m_physical, stacktrace_entry{})},
           m_is_inline{std::exchange(other.m_is_inline, false)} {
@@ -144,6 +149,16 @@ auto logical_stacktrace_entry::source() const -> source_location {
 auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
     const auto [file_name, line_number] = source_impl(physical(), is_inline(), impl());
     return {.file_name = windows::wide_to_utf8(file_name), .line_number = line_number};
+}
+
+auto logical_stacktrace_entry::impl() const noexcept -> const impl_payload & {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): impl_payload was created by placement new in a ctor
+    return *std::launder(reinterpret_cast<const impl_payload *>(m_impl_storage.data()));
+}
+
+auto logical_stacktrace_entry::impl() noexcept -> impl_payload & {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): impl_payload was created by placement new in a ctor
+    return *std::launder(reinterpret_cast<impl_payload *>(m_impl_storage.data()));
 }
 
 

@@ -36,12 +36,12 @@ TEST_CASE("util: standard library lock types satisfy basic_lockable") {
     STATIC_REQUIRE(basic_lockable<std::shared_timed_mutex>);
 }
 
-TEST_CASE("util: a nothrow-lockable lock type satisfies nothrow_lockable") {
+TEST_CASE("util: a nothrow-lockable lock type satisfies nothrow_basic_lockable") {
     struct nothrow_lockable_type {
         void lock() noexcept;
         void unlock();
     };
-    STATIC_REQUIRE(nothrow_lockable<nothrow_lockable_type>);
+    STATIC_REQUIRE(nothrow_basic_lockable<nothrow_lockable_type>);
 }
 
 

@@ -34,7 +34,7 @@ concept basic_lockable = requires(Lock &lock) {
 };
 
 template<typename Lock>
-concept nothrow_lockable = basic_lockable<Lock> && requires(Lock &lock) {
+concept nothrow_basic_lockable = basic_lockable<Lock> && requires(Lock &lock) {
     { lock.lock() }
     noexcept;
     // lock.unlock() throws no exceptions anyway
@@ -42,6 +42,7 @@ concept nothrow_lockable = basic_lockable<Lock> && requires(Lock &lock) {
 
 
 template<typename T, basic_lockable Lock = std::mutex>
+    requires std::default_initializable<Lock>
 class locked {
 public:
     template<typename... Args>
@@ -58,14 +59,15 @@ public:
     auto operator=(locked &&rhs) = delete;
 
     template<std::invocable<const T &> Fn>
-    auto with_lock(Fn &&fn) const noexcept(nothrow_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, const T &>)
+    auto with_lock(Fn &&fn) const noexcept(nothrow_basic_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, const T &>)
             -> decltype(auto) {
         const auto guard = std::lock_guard{m_lock};
         return std::invoke(std::forward<Fn>(fn), m_value);
     }
 
     template<std::invocable<T &> Fn>
-    auto with_lock(Fn &&fn) noexcept(nothrow_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, T &>) -> decltype(auto) {
+    auto with_lock(Fn &&fn) noexcept(nothrow_basic_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, T &>)
+            -> decltype(auto) {
         const auto guard = std::lock_guard{m_lock};
         return std::invoke(std::forward<Fn>(fn), m_value);
     }

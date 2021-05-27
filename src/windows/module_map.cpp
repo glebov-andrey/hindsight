@@ -95,7 +95,7 @@ struct basic_module_info {
     if (!GetModuleInformation(process ? process : GetCurrentProcess(), module, &info, sizeof info)) {
         return std::nullopt;
     }
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): we only use the numeric value from here onwards
     return basic_module_info{.offset = reinterpret_cast<std::uintptr_t>(info.lpBaseOfDll), .size = info.SizeOfImage};
 }
 
