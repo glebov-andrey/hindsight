@@ -27,7 +27,7 @@
 
 namespace hindsight::util {
 
-TEST_CASE("util: standard library lock types satisfy basic_lockable") {
+TEST_CASE("util: standard library mutex types satisfy basic_lockable") {
     STATIC_REQUIRE(basic_lockable<std::mutex>);
     STATIC_REQUIRE(basic_lockable<std::timed_mutex>);
     STATIC_REQUIRE(basic_lockable<std::recursive_mutex>);
@@ -36,14 +36,10 @@ TEST_CASE("util: standard library lock types satisfy basic_lockable") {
     STATIC_REQUIRE(basic_lockable<std::shared_timed_mutex>);
 }
 
-TEST_CASE("util: a nothrow-lockable lock type satisfies nothrow_basic_lockable") {
-    struct nothrow_lockable_type {
-        void lock() noexcept;
-        void unlock();
-    };
-    STATIC_REQUIRE(nothrow_basic_lockable<nothrow_lockable_type>);
+TEST_CASE("util: standard library shared mutex types satisfies basic_shared_lockable") {
+    STATIC_REQUIRE(basic_shared_lockable<std::shared_mutex>);
+    STATIC_REQUIRE(basic_shared_lockable<std::shared_timed_mutex>);
 }
-
 
 TEST_CASE("util: locked<T> is constructible from T's constructor parameters") {
     STATIC_REQUIRE(std::constructible_from<locked<int>>);
