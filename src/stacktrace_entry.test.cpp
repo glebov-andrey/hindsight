@@ -24,6 +24,9 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#ifdef HINDSIGHT_HAS_STD_FORMAT
+    #include <format>
+#endif
 
 #ifdef HINDSIGHT_WITH_FMT
 HINDSIGHT_PRAGMA_MSVC("warning(push)")
@@ -140,6 +143,28 @@ TEST_CASE("stacktrace_entry's operator<< adds zero-padding and does not change t
         REQUIRE(stream.str() == std::wstring{L"**42"} + small_uintptr_wstring + L"42**42");
     }
 }
+
+#ifdef HINDSIGHT_HAS_STD_FORMAT
+
+TEST_CASE("stacktrace_entry's std::formatter specialization produces a hexadecimal number") {
+    constexpr auto entry = stacktrace_entry{from_native_handle, large_uintptr_value};
+    REQUIRE(std::format("{}", entry) == large_uintptr_string);
+    REQUIRE(std::format(L"{}", entry) == large_uintptr_wstring);
+}
+
+TEST_CASE("stacktrace_entry's std::formatter specialization adds zero-padding") {
+    constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
+    REQUIRE(std::format("{}", entry) == small_uintptr_string);
+    REQUIRE(std::format(L"{}", entry) == small_uintptr_wstring);
+}
+
+TEST_CASE("stacktrace_entry's std::formatter specialization throws for a non-empty format specification") {
+    constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
+    REQUIRE_THROWS_AS(std::format("{:x}", entry), std::format_error);
+    REQUIRE_THROWS_AS(std::format(L"{:x}", entry), std::format_error);
+}
+
+#endif
 
 #ifdef HINDSIGHT_WITH_FMT
 

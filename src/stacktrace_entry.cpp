@@ -49,14 +49,20 @@ auto operator<<(std::wostream &stream, const stacktrace_entry entry) -> std::wos
     return format_entry(stream, entry);
 }
 
-#ifdef HINDSIGHT_WITH_FMT
 namespace detail {
 
-auto throw_format_error() -> void {
+#ifdef HINDSIGHT_HAS_STD_FORMAT
+auto throw_std_format_error() -> void {
+    throw std::format_error{"invalid format specification for hindsight::stacktrace_entry"};
+}
+#endif
+
+#ifdef HINDSIGHT_WITH_FMT
+auto throw_fmt_format_error() -> void {
     throw fmt::format_error{"invalid format specification for hindsight::stacktrace_entry"};
 }
+#endif
 
 } // namespace detail
-#endif
 
 } // namespace hindsight

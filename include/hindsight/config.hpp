@@ -19,6 +19,8 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_CONFIG_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_CONFIG_HPP
 
+#include <version>
+
 #ifdef _WIN32
     #define HINDSIGHT_OS_WINDOWS
 #elif defined __unix__ || defined __unix || (defined __APPLE__ && defined __MACH__)
@@ -68,6 +70,12 @@
     #define HINDSIGHT_PRAGMA_MSVC(str) _Pragma(str)
 #else
     #define HINDSIGHT_PRAGMA_MSVC(str)
+#endif
+
+
+// The MSVC STL <format> implementation is disabled due to https://github.com/microsoft/STL/issues/1961.
+#if __cpp_lib_format >= 201907L && !defined _MSVC_STL_VERSION
+    #define HINDSIGHT_HAS_STD_FORMAT
 #endif
 
 #endif // HINDSIGHT_INCLUDE_HINDSIGHT_CONFIG_HPP

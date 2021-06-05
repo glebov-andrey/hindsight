@@ -24,13 +24,17 @@
 #include <compare>
 #include <cstdint>
 #include <iosfwd>
-
-#ifdef HINDSIGHT_WITH_FMT
+#if defined HINDSIGHT_HAS_STD_FORMAT || defined HINDSIGHT_WITH_FMT
     #include <concepts>
     #include <limits>
     #include <string_view>
-
-    #include <fmt/format.h>
+    #ifdef HINDSIGHT_HAS_STD_FORMAT
+        #include <format>
+        #include <iterator>
+    #endif
+    #ifdef HINDSIGHT_WITH_FMT
+        #include <fmt/format.h>
+    #endif
 #endif
 
 namespace hindsight {
@@ -68,7 +72,7 @@ private:
     native_handle_type m_handle{};
 };
 
-#ifdef HINDSIGHT_WITH_FMT
+#if defined HINDSIGHT_HAS_STD_FORMAT || defined HINDSIGHT_WITH_FMT
 namespace detail {
 
 template<typename Char>
@@ -103,27 +107,51 @@ constexpr auto stacktrace_entry_fmt_string = [] {
     #undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
 }();
 
-[[noreturn]] HINDSIGHT_API auto throw_format_error() -> void;
+template<typename CharT, void (&ThrowFormatError)()>
+struct stacktrace_entry_format_parser {
+    constexpr auto parse(auto &context) const {
+        auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
+        if (it != context.end() && *it != CharT{'}'}) {
+            ThrowFormatError();
+        }
+        return it;
+    }
+};
+
+    #ifdef HINDSIGHT_HAS_STD_FORMAT
+[[noreturn]] HINDSIGHT_API auto throw_std_format_error() -> void;
+    #endif
+
+    #ifdef HINDSIGHT_WITH_FMT
+[[noreturn]] HINDSIGHT_API auto throw_fmt_format_error() -> void;
+    #endif
 
 } // namespace detail
 #endif
 
 } // namespace hindsight
 
+#ifdef HINDSIGHT_HAS_STD_FORMAT
+
+template<typename CharT>
+struct std::formatter<hindsight::stacktrace_entry, CharT>
+        : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_std_format_error> {
+    template<output_iterator<const CharT &> OutputIt>
+    auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const {
+        return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<CharT>, entry.native_handle());
+    }
+};
+
+#endif
+
 #ifdef HINDSIGHT_WITH_FMT
 
-template<typename Char>
-struct fmt::formatter<hindsight::stacktrace_entry, Char> {
-    constexpr auto parse(auto &context) const {
-        auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
-        if (it != context.end() && *it != Char{'}'}) {
-            hindsight::detail::throw_format_error();
-        }
-        return it;
-    }
-
-    auto format(const hindsight::stacktrace_entry entry, auto &context) const {
-        return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<Char>, entry.native_handle());
+template<typename CharT>
+struct fmt::formatter<hindsight::stacktrace_entry, CharT>
+        : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_fmt_format_error> {
+    template<typename OutputIt>
+    auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const {
+        return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<CharT>, entry.native_handle());
     }
 };
 
