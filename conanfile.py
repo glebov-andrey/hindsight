@@ -57,12 +57,14 @@ class HindsightConan(ConanFile):
     }
 
     def requirements(self):
+        if self.options.with_fmt:
+            self.requires("fmt/[^7.1.3]")
         if self.settings.os != "Windows":
             self.requires("libunwind/[^1.5.0]")
             self.requires("libbacktrace/cci.20210118")
 
     def build_requirements(self):
-        if self.options.with_fmt or self.options.build_examples:
+        if self.options.build_examples:
             self.build_requires("fmt/[^7.1.3]")
         if self.options.build_tests:
             self.build_requires("catch2/[^2.13.6]")

@@ -27,9 +27,11 @@
 #include <ranges>
 #include <string>
 #include <utility>
-#ifdef HINDSIGHT_OS_WINDOWS
+#if defined HINDSIGHT_OS_WINDOWS
     #include <array>
     #include <cstddef>
+#endif
+#if defined HINDSIGHT_OS_WINDOWS || defined HINDSIGHT_OS_LINUX
     #include <memory>
 #endif
 
@@ -91,6 +93,17 @@ public:
     HINDSIGHT_API_HIDDEN logical_stacktrace_entry(stacktrace_entry physical,
                                                   bool is_inline,
                                                   impl_payload &&impl) noexcept;
+#elif defined HINDSIGHT_OS_LINUX
+    struct impl_tag;
+    HINDSIGHT_API_HIDDEN logical_stacktrace_entry(impl_tag &&impl,
+                                                  stacktrace_entry physical,
+                                                  bool is_inline,
+                                                  bool maybe_mangled,
+                                                  const char *symbol,
+                                                  const char *file_name,
+                                                  std::uint_least32_t line_number,
+                                                  std::uint_least32_t column_number,
+                                                  std::shared_ptr<const void> resolver_impl) noexcept;
 #else
     struct impl_tag;
     HINDSIGHT_API_HIDDEN logical_stacktrace_entry(impl_tag &&impl,
@@ -111,6 +124,15 @@ private:
 
     HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() const noexcept -> const impl_payload &;
     HINDSIGHT_API_HIDDEN [[nodiscard]] auto impl() noexcept -> impl_payload &;
+#elif defined HINDSIGHT_OS_LINUX
+    bool m_maybe_mangled{};
+    const char *m_symbol{};
+
+    const char *m_file_name{};
+    std::uint_least32_t m_line_number{};
+    std::uint_least32_t m_column_number{};
+
+    std::shared_ptr<const void> m_resolver_impl;
 #else
     std::string m_symbol{};
     source_location m_source{};
@@ -125,8 +147,19 @@ inline logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_ent
 inline auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noexcept -> void {
     std::ranges::swap(m_physical, other.m_physical);
     std::ranges::swap(m_is_inline, other.m_is_inline);
+    #ifdef HINDSIGHT_OS_LINUX
+    std::ranges::swap(m_maybe_mangled, other.m_maybe_mangled);
+    std::ranges::swap(m_symbol, other.m_symbol);
+
+    std::ranges::swap(m_file_name, other.m_file_name);
+    std::ranges::swap(m_line_number, other.m_line_number);
+    std::ranges::swap(m_column_number, other.m_column_number);
+
+    std::ranges::swap(m_resolver_impl, other.m_resolver_impl);
+    #else
     std::ranges::swap(m_symbol, other.m_symbol);
     std::ranges::swap(m_source, other.m_source);
+    #endif
 }
 
 #endif
@@ -145,7 +178,7 @@ public:
     resolver(resolver &&other) noexcept = default;
 
     ~resolver()
-#ifndef HINDSIGHT_OS_WINDOWS
+#if !defined HINDSIGHT_OS_WINDOWS && !defined HINDSIGHT_OS_LINUX
             = default
 #endif
             ;
@@ -203,12 +236,16 @@ private:
 
     auto resolve_impl(stacktrace_entry entry, resolve_cb *callback, void *user_data) -> void;
 
-#ifdef HINDSIGHT_OS_WINDOWS
+#if defined HINDSIGHT_OS_WINDOWS || defined HINDSIGHT_OS_LINUX
     class impl;
     HINDSIGHT_PRAGMA_MSVC("warning(push)")
     // std::unique_ptr<impl> needs to have dll-interface to be used by clients of class 'hindsight::resolver'
     HINDSIGHT_PRAGMA_MSVC("warning(disable : 4251)")
+    #ifdef HINDSIGHT_OS_WINDOWS
     std::unique_ptr<impl> m_impl;
+    #elif defined HINDSIGHT_OS_LINUX
+    std::shared_ptr<impl> m_impl;
+    #endif
     HINDSIGHT_PRAGMA_MSVC("warning(pop)")
 #endif
 };

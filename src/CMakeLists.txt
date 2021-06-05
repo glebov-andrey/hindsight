@@ -20,6 +20,7 @@ target_sources(
             capture_unix.cpp
             capture_windows.cpp
             resolver_backtrace.cpp
+            resolver_libdw.cpp
             resolver_windows.cpp
             resolver_windows_impl.hpp
             simple.cpp
@@ -37,6 +38,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
                 windows/encoding.hpp
                 windows/module_map.cpp
                 windows/module_map.hpp)
+else ()
+    target_sources(
+        hindsight
+        PRIVATE # cmake-format: sort
+                itanium_abi/demangle.cpp
+                itanium_abi/demangle.hpp)
 endif ()
 
 if (HINDSIGHT_BUILD_TESTS)

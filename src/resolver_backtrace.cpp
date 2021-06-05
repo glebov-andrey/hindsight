@@ -18,35 +18,23 @@
 
 #include <hindsight/config.hpp>
 
-#ifndef HINDSIGHT_OS_WINDOWS
+#if !defined HINDSIGHT_OS_WINDOWS && !defined HINDSIGHT_OS_LINUX
 
     #include <hindsight/resolver.hpp>
 
     #include <cerrno>
-    #include <cstdlib>
     #include <exception>
-    #include <memory>
     #include <new>
     #include <optional>
     #include <string_view>
 
-    #include <cxxabi.h>
-
     #include <backtrace.h>
+
+    #include "itanium_abi/demangle.hpp"
 
 namespace hindsight {
 
 namespace {
-
-struct free_deleter {
-    auto operator()(void *const ptr) const noexcept {
-        std::free(ptr); // NOLINT(cppcoreguidelines-owning-memory, hicpp-no-malloc)
-    }
-};
-
-template<typename T>
-using unique_freeable = std::unique_ptr<T, free_deleter>;
-
 
 [[nodiscard]] auto get_backtrace_state() -> backtrace_state * {
     static auto *const global_state = [] { // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -148,25 +136,10 @@ auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const call
                     if (state.flush_buffered_entry(true)) {
                         return 0;
                     }
-                    auto demangled_ptr = unique_freeable<char[]>{}; // NOLINT(hicpp-avoid-c-arrays)
-                    auto symbol_view = std::string_view{};
-                    if (function) {
-                        auto demangle_status = 0;
-                        demangled_ptr.reset(__cxxabiv1::__cxa_demangle(function, nullptr, nullptr, &demangle_status));
-                        switch (demangle_status) {
-                            case 0: // The demangling operation succeeded.
-                                symbol_view = demangled_ptr.get();
-                                break;
-                            case -1: // A memory allocation failure occurred.
-                                state.exception = std::make_exception_ptr(std::bad_alloc{});
-                                return 1;
-                            default:
-                                // -2: mangled_name is not a valid name under the C++ ABI mangling rules.
-                                // -3: One of the arguments is invalid.
-                                symbol_view = function;
-                                break;
-                        }
-                    }
+                    const auto demangled_function = function ? itanium_abi::demangle(function) : nullptr;
+                    const auto symbol_view = demangled_function ? std::string_view{demangled_function.get()}
+                                             : function         ? std::string_view{function}
+                                                                : std::string_view{};
                     state.buffered_entry = logical_stacktrace_entry{
                             {},
                             state.entry,

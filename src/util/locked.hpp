@@ -22,6 +22,7 @@
 #include <concepts>
 #include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <type_traits>
 #include <utility>
 
@@ -34,10 +35,9 @@ concept basic_lockable = requires(Lock &lock) {
 };
 
 template<typename Lock>
-concept nothrow_basic_lockable = basic_lockable<Lock> && requires(Lock &lock) {
-    { lock.lock() }
-    noexcept;
-    // lock.unlock() throws no exceptions anyway
+concept basic_shared_lockable = basic_lockable<Lock> && requires(Lock &lock) {
+    lock.lock_shared();
+    lock.unlock_shared();
 };
 
 
@@ -59,18 +59,29 @@ public:
     auto operator=(locked &&rhs) = delete;
 
     template<std::invocable<const T &> Fn>
-    auto with_lock(Fn &&fn) const noexcept(nothrow_basic_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, const T &>)
+    auto with_lock(Fn &&fn) const noexcept(noexcept(Lock{}.lock()) && std::is_nothrow_invocable_v<Fn, const T &>)
             -> decltype(auto) {
         const auto guard = std::lock_guard{m_lock};
         return std::invoke(std::forward<Fn>(fn), m_value);
     }
 
     template<std::invocable<T &> Fn>
-    auto with_lock(Fn &&fn) noexcept(nothrow_basic_lockable<Lock> &&std::is_nothrow_invocable_v<Fn, T &>)
+    auto with_lock(Fn &&fn) noexcept(noexcept(Lock{}.lock()) && std::is_nothrow_invocable_v<Fn, T &>)
             -> decltype(auto) {
         const auto guard = std::lock_guard{m_lock};
         return std::invoke(std::forward<Fn>(fn), m_value);
     }
+
+    template<std::invocable<const T &> Fn>
+        requires basic_shared_lockable<Lock>
+    auto with_shared_lock(Fn &&fn) const
+            noexcept(noexcept(Lock{}.lock_shared()) && std::is_nothrow_invocable_v<Fn, const T &>) -> decltype(auto) {
+        const auto guard = std::shared_lock{m_lock};
+        return std::invoke(std::forward<Fn>(fn), m_value);
+    }
+
+    [[nodiscard]] auto unsafe_get() const noexcept -> const T & { return m_value; }
+    [[nodiscard]] auto unsafe_get() noexcept -> T & { return m_value; }
 
 private:
     mutable Lock m_lock{};
