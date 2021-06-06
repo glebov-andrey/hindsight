@@ -27,7 +27,7 @@
 #include <ranges>
 #include <string>
 #include <utility>
-#if defined HINDSIGHT_OS_WINDOWS
+#ifdef HINDSIGHT_OS_WINDOWS
     #include <array>
     #include <cstddef>
 #endif

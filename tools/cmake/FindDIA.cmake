@@ -31,7 +31,7 @@ This module provides the following imported targets, if found:
 Result Variables
 ^^^^^^^^^^^^^^^^
 
-This module will defined the following variables:
+This module will define the following variables:
 
 ``DIA_FOUND``
   True if the DIA library was found.
@@ -85,6 +85,10 @@ if (DIA_FOUND AND NOT TARGET DIA::DIA)
     add_library(DIA::DIA STATIC IMPORTED)
     set_target_properties(
         DIA::DIA
-        PROPERTIES IMPORTED_LOCATION ${DIA_GUIDS_LIBRARY} #
-                   INTERFACE_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR})
+        PROPERTIES IMPORTED_LOCATION ${DIA_GUIDS_LIBRARY}
+                   INTERFACE_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR}
+                   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR})
+    if (NOT DIA_FIND_QUIETLY)
+        message("-- Found DIA SDK: ${DIA_INCLUDE_DIR}")
+    endif ()
 endif ()

@@ -32,7 +32,7 @@
 
 
 #ifdef HINDSIGHT_OS_WINDOWS
-using CONTEXT = struct _CONTEXT; // NOLINT(bugprone-reserved-identifier): _CONTEXT is defined like this in Windows.h
+using CONTEXT = struct _CONTEXT; // NOLINT(bugprone-reserved-identifier): CONTEXT is defined like this in Windows.h
 #else
 using ucontext_t = struct ucontext_t;
 #endif

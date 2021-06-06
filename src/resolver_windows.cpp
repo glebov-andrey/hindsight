@@ -25,10 +25,7 @@
 
     #include <Windows.h>
 // Windows.h must be included before diacreate.h
-HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
-HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wlanguage-extension-token\"") // __wchar_t used in diacreate.h
     #include <diacreate.h>
-HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
 
     #include "windows/encoding.hpp"
 
