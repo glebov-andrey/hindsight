@@ -73,8 +73,8 @@
 #endif
 
 
-// The MSVC STL <format> implementation is disabled due to https://github.com/microsoft/STL/issues/1961.
-#if __cpp_lib_format >= 201907L && !defined _MSVC_STL_VERSION
+// The MSVC STL <format> implementation is disabled before 202105L due to https://github.com/microsoft/STL/issues/1961.
+#if __cpp_lib_format >= 201907L && (!defined _MSVC_STL_UPDATE || _MSVC_STL_UPDATE >= 202105L)
     #define HINDSIGHT_HAS_STD_FORMAT
 #endif
 

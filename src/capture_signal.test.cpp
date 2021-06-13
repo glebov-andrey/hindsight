@@ -20,11 +20,7 @@
 
 #include <algorithm>
 #include <atomic>
-#include <concepts>
 #include <cstddef>
-#include <functional>
-#include <type_traits>
-#include <utility>
 
 #ifdef HINDSIGHT_OS_WINDOWS
     #include <stdexcept>
@@ -42,33 +38,13 @@
 
 #include <hindsight/capture.hpp>
 
+#include "util/finally.hpp"
+
 namespace hindsight {
 
 void *volatile null_pointer = nullptr;
 
 namespace {
-
-template<std::invocable Fn>
-class finally {
-public:
-    template<typename FnArg>
-        requires std::constructible_from<Fn, FnArg>
-    explicit finally(FnArg &&fn) noexcept(std::is_nothrow_constructible_v<Fn, FnArg>) : m_fn{std::forward<FnArg>(fn)} {}
-
-    finally(const finally &other) = delete;
-    finally(finally &&other) = delete;
-
-    ~finally() noexcept(std::is_nothrow_invocable_v<Fn &>) { std::invoke(m_fn); }
-
-    auto operator=(const finally &other) -> finally & = delete;
-    auto operator=(finally &&other) -> finally & = delete;
-
-private:
-    Fn m_fn;
-};
-
-template<std::invocable Fn>
-explicit finally(Fn &&fn) -> finally<std::decay_t<Fn>>;
 
 template<typename T, std::size_t N>
 [[nodiscard]] constexpr auto sig_begin(T (&array)[N]) noexcept -> T * {
@@ -147,7 +123,7 @@ template<bool RollbackContext>
     if (!handler) {
         throw std::runtime_error{"Failed to add the exception handler"};
     }
-    return finally{[handler] {
+    return util::finally{[handler] {
         if (!RemoveVectoredExceptionHandler(handler)) {
             throw std::runtime_error{"Failed to remove the exception handler"};
         }
@@ -171,7 +147,7 @@ template<bool RollbackContext>
     if (sigaction(SIGSEGV, &sig_action, &old_sig_action) != 0) {
         throw std::system_error{errno, std::system_category(), "Failed to set the SIGSEGV handler"};
     }
-    return finally{[old_sig_action] {
+    return util::finally{[old_sig_action] {
         if (sigaction(SIGSEGV, &old_sig_action, nullptr) != 0) {
             throw std::system_error{errno, std::system_category(), "Failed to reset the SIGSEGV handler"};
         }

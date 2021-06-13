@@ -41,6 +41,7 @@
     #include "util/locked.hpp"
 
     #include "itanium_abi/demangle.hpp"
+    #include "unix/encoding.hpp"
 
 namespace hindsight {
 
@@ -277,21 +278,55 @@ logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entr
 
 logical_stacktrace_entry::~logical_stacktrace_entry() = default;
 
-auto logical_stacktrace_entry::symbol() const -> std::string {
-    const auto demangled = m_symbol && m_maybe_mangled ? itanium_abi::demangle(m_symbol) : nullptr;
-    return std::string{demangled  ? std::string_view{demangled.get()}
-                       : m_symbol ? std::string_view{m_symbol}
-                                  : std::string_view{}};
+namespace {
+
+template<typename CharT>
+auto demangle_and_encode_symbol(const char *const symbol, const bool maybe_mangled, const auto get_transcoder)
+        -> std::basic_string<CharT> {
+    const auto demangled = symbol && maybe_mangled ? itanium_abi::demangle(symbol) : nullptr;
+    const auto unsanitized = demangled ? std::string_view{demangled.get()}
+                             : symbol  ? std::string_view{symbol}
+                                       : std::string_view{};
+    if (unsanitized.empty()) {
+        return {};
+    }
+    return unix::transcode(get_transcoder(), unsanitized, std::in_place_type<CharT>);
 }
 
-// TODO: Implement conversion to UTF-8
-// auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {}
+} // namespace
+
+auto logical_stacktrace_entry::symbol() const -> std::string {
+    return demangle_and_encode_symbol<char>(m_symbol, m_maybe_mangled, [] {
+        return unix::get_utf8_to_current_transcoder();
+    });
+}
+
+auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {
+    return demangle_and_encode_symbol<char8_t>(m_symbol, m_maybe_mangled, [] { return unix::get_utf8_sanitizer(); });
+}
+
+namespace {
+
+template<typename CharT>
+auto encode_file_name(const char *const file_name, const auto get_transcoder) -> std::basic_string<CharT> {
+    const auto unsanitized_file_name = file_name ? std::string_view{file_name} : std::string_view{};
+    if (unsanitized_file_name.empty()) {
+        return {};
+    }
+    return unix::transcode(get_transcoder(), unsanitized_file_name, std::in_place_type<CharT>);
+}
+
+} // namespace
 
 auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name = m_file_name ? m_file_name : "", .line_number = m_line_number};
+    return {.file_name = encode_file_name<char>(m_file_name, [] { return unix::get_utf8_to_current_transcoder(); }),
+            .line_number = m_line_number};
 }
 
-// auto logical_stacktrace_entry::u8_source() const -> u8_source_location {}
+auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
+    return {.file_name = encode_file_name<char8_t>(m_file_name, [] { return unix::get_utf8_sanitizer(); }),
+            .line_number = m_line_number};
+}
 
 
 class resolver::impl : public std::enable_shared_from_this<impl> {

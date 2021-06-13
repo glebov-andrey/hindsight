@@ -62,7 +62,7 @@ public:
 
     [[nodiscard]] constexpr friend auto operator==(os_handle lhs, os_handle rhs) -> bool = default;
 
-    [[nodiscard]] constexpr friend auto operator==(os_handle lhs, std::nullptr_t /* rhs */) {
+    [[nodiscard]] constexpr friend auto operator==(const os_handle lhs, std::nullptr_t /* rhs */) {
         return lhs.m_descriptor == invalid_handle_value;
     }
 

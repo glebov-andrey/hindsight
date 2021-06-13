@@ -26,6 +26,8 @@ target_sources(
             simple.cpp
             stacktrace.cpp
             stacktrace_entry.cpp
+            util/finally.cpp
+            util/finally.hpp
             util/locked.cpp
             util/locked.hpp)
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -43,7 +45,9 @@ else ()
         hindsight
         PRIVATE # cmake-format: sort
                 itanium_abi/demangle.cpp
-                itanium_abi/demangle.hpp)
+                itanium_abi/demangle.hpp
+                unix/encoding.cpp
+                unix/encoding.hpp)
 endif ()
 
 if (HINDSIGHT_BUILD_TESTS)
@@ -54,4 +58,7 @@ if (HINDSIGHT_BUILD_TESTS)
                 capture_signal.test.cpp
                 stacktrace_entry.test.cpp
                 util/locked.test.cpp)
+    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_sources(hindsight_tests PRIVATE unix/encoding.test.cpp)
+    endif ()
 endif ()
