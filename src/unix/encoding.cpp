@@ -22,6 +22,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <iterator>
+#include <new>
 #include <sstream>
 #include <system_error>
 
@@ -76,6 +77,9 @@ template<typename CharT>
                     const auto used_output = output.size() - output_remaining;
 
                     const auto new_size = output.size() + std::min(output.size(), output.max_size() - output.size());
+                    if (new_size == output.size()) {
+                        throw std::bad_alloc{};
+                    }
                     output.resize(new_size);
                     output.resize(output.capacity());
 

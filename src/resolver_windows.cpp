@@ -24,7 +24,7 @@
     #include <new>
 
     #include <Windows.h>
-// Windows.h must be included before diacreate.h
+    // Windows.h must be included before diacreate.h
     #include <diacreate.h>
 
     #include "windows/encoding.hpp"
