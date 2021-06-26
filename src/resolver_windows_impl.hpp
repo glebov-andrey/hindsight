@@ -41,7 +41,7 @@ class resolver::impl {
 public:
     explicit impl() = default;
 
-    explicit impl(const HANDLE process) noexcept
+    explicit impl(from_process_handle_t /* from_process_handle_tag */, const HANDLE process) noexcept
             : m_module_map{std::in_place_type<windows::remote_module_map>, process} {}
 
     auto resolve(stacktrace_entry entry, resolve_cb *callback, void *user_data) -> void;

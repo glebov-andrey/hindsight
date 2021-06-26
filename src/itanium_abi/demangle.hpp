@@ -26,7 +26,7 @@ namespace hindsight::itanium_abi {
 
 struct std_free_deleter {
     auto operator()(void *const ptr) const noexcept {
-        std::free(ptr); // NOLINT(cppcoreguidelines-owning-memory, hicpp-no-malloc)
+        std::free(ptr); // NOLINT(hicpp-no-malloc)
     }
 };
 

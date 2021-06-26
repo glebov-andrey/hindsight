@@ -165,12 +165,36 @@ inline auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noex
 #endif
 
 
+#ifdef HINDSIGHT_OS_WINDOWS
+
+struct from_process_handle_t {
+    explicit from_process_handle_t() = default;
+};
+
+inline constexpr auto from_process_handle = from_process_handle_t{};
+
+#endif
+
+#ifdef HINDSIGHT_OS_LINUX
+
+struct from_proc_maps_t {
+    explicit from_proc_maps_t() = default;
+};
+
+inline constexpr auto from_proc_maps = from_proc_maps_t{};
+
+#endif
+
 class HINDSIGHT_API resolver {
 public:
     explicit resolver();
 
 #ifdef HINDSIGHT_OS_WINDOWS
-    explicit resolver(HANDLE process);
+    explicit resolver(from_process_handle_t from_process_handle_tag, HANDLE process);
+#endif
+
+#ifdef HINDSIGHT_OS_LINUX
+    explicit resolver(from_proc_maps_t from_proc_maps_tag, int proc_maps_descriptor);
 #endif
 
     resolver(const resolver &other) = delete;

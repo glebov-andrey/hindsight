@@ -248,7 +248,8 @@ auto resolver::impl::session_for_entry(const stacktrace_entry entry) -> windows:
 
 resolver::resolver() : m_impl{std::make_unique<impl>()} {}
 
-resolver::resolver(const HANDLE process) : m_impl{std::make_unique<impl>(process)} {}
+resolver::resolver(const from_process_handle_t from_process_handle_tag, const HANDLE process)
+        : m_impl{std::make_unique<impl>(from_process_handle_tag, process)} {}
 
 resolver::~resolver() = default;
 

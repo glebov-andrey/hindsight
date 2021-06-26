@@ -25,6 +25,7 @@
     #include <algorithm>
     #include <cassert>
     #include <cstddef>
+    #include <cstdio>
     #include <limits>
     #include <optional>
     #include <shared_mutex>
@@ -32,6 +33,7 @@
     #include <string_view>
     #include <vector>
 
+    #include <stdio.h> // NOLINT(hicpp-deprecated-headers): fdopen is defined by POSIX in <stdio.h>
     #include <unistd.h>
 
     #include <dwarf.h>
@@ -46,6 +48,18 @@
 namespace hindsight {
 
 namespace {
+
+struct close_c_file {
+    auto operator()(std::FILE *const file) const noexcept -> void {
+        [[maybe_unused]] const auto result = std::fclose(file);
+        assert(result == 0);
+    }
+};
+
+using unique_c_file = std::unique_ptr<std::FILE, close_c_file>;
+
+[[nodiscard]] auto c_file_from_fd(const int fd) noexcept { return unique_c_file{fdopen(fd, "r")}; }
+
 
 struct end_dwfl_session {
     auto operator()(Dwfl *const ptr) const noexcept -> void { dwfl_end(ptr); }
@@ -333,6 +347,10 @@ class resolver::impl : public std::enable_shared_from_this<impl> {
 public:
     explicit impl() noexcept : m_dwfl_session{create_initial_session()} {}
 
+    explicit impl(from_proc_maps_t /* from_proc_maps_tag */, const int proc_maps_descriptor) noexcept
+            : m_proc_maps{c_file_from_fd(proc_maps_descriptor)},
+              m_dwfl_session{m_proc_maps ? create_initial_session() : nullptr} {}
+
     impl(const impl &other) = delete;
     impl(impl &&other) = delete;
 
@@ -353,9 +371,9 @@ public:
             return;
         }
 
-        m_dwfl_session.with_lock([](const unique_dwfl_session &session) noexcept {
+        m_dwfl_session.with_lock([&](const unique_dwfl_session &session) noexcept {
             dwfl_report_begin_add(session.get());
-            dwfl_linux_proc_report(session.get(), getpid());
+            report_mappings(*session);
             dwfl_report_end(session.get(), nullptr, nullptr);
         });
 
@@ -367,6 +385,7 @@ public:
     }
 
 private:
+    const unique_c_file m_proc_maps{};
     const util::locked<unique_dwfl_session, std::shared_mutex> m_dwfl_session;
 
     struct callback_state {
@@ -393,14 +412,20 @@ private:
         }
     };
 
-    [[nodiscard]] static auto create_initial_session() noexcept -> unique_dwfl_session {
+    auto report_mappings(Dwfl &session) const noexcept -> bool {
+        const auto result = m_proc_maps ? dwfl_linux_proc_maps_report(&session, m_proc_maps.get())
+                                        : dwfl_linux_proc_report(&session, getpid());
+        return result == 0;
+    }
+
+    [[nodiscard]] auto create_initial_session() const noexcept -> unique_dwfl_session {
         auto session = unique_dwfl_session{dwfl_begin(&dwfl_session_callbacks)};
 
         if (session) {
             dwfl_report_begin(session.get());
-            const auto proc_report_result = dwfl_linux_proc_report(session.get(), getpid());
+            const auto success = report_mappings(*session);
             dwfl_report_end(session.get(), nullptr, nullptr);
-            if (proc_report_result != 0) {
+            if (!success) {
                 session.reset();
             }
         }
@@ -526,6 +551,9 @@ private:
 };
 
 resolver::resolver() : m_impl{std::make_shared<impl>()} {}
+
+resolver::resolver(const from_proc_maps_t from_proc_maps_tag, const int proc_maps_descriptor)
+        : m_impl{std::make_shared<impl>(from_proc_maps_tag, proc_maps_descriptor)} {}
 
 resolver::~resolver() = default;
 
