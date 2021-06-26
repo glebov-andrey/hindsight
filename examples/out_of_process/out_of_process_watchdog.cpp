@@ -28,6 +28,8 @@
 
 #ifdef HINDSIGHT_OS_WINDOWS
     #include <Windows.h>
+#elif defined HINDSIGHT_OS_LINUX
+    #include <unistd.h>
 #endif
 
 #include <hindsight/resolver.hpp>
@@ -53,7 +55,21 @@ auto run() -> int try {
     }
     print_log("WATCHDOG: Read the host process handle from standard input ({})\n", host_handle);
 
-    auto host_resolver = resolver{host_handle};
+    auto host_resolver = resolver{from_process_handle, host_handle};
+#elif defined HINDSIGHT_OS_LINUX
+    constexpr auto stdin_handle = STDIN_FILENO;
+
+    auto proc_maps_descriptor = -1;
+    if (!read_from_handle(stdin_handle, proc_maps_descriptor)) {
+        throw_last_system_error("Failed to read the host process /proc/self/maps descriptor from standard input");
+    }
+    print_log("WATCHDOG: Read the host process /proc/self/maps descriptor from standard input ({})\n",
+              proc_maps_descriptor);
+
+    auto host_resolver = resolver{from_proc_maps, proc_maps_descriptor};
+#else
+    #error WATCHDOG is not implemented for this OS
+#endif
     print_log("WATCHDOG: Created a resolver for the host process\n");
 
     print_log("WATCHDOG: Started, waiting for a stacktrace on standard input\n");
@@ -84,9 +100,7 @@ auto run() -> int try {
                       source.line_number);
         }
     }
-#else
-    #error WATCHDOG is not implemented for this OS
-#endif
+
     return EXIT_SUCCESS;
 } catch (const std::exception &e) {
     print_log("WATCHDOG: {}\n", e.what());

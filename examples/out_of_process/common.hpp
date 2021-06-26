@@ -78,12 +78,13 @@ struct close_os_handle {
     auto operator()(const os_handle handle) const noexcept {
 #ifdef HINDSIGHT_OS_WINDOWS
         [[maybe_unused]] const auto succeeded = CloseHandle(handle);
-#elif defined HINDSIGHT_OS_UNIX
+        assert(succeeded);
+#elif defined HINDSIGHT_OS_LINUX // Only Linux because on other platforms EINTR may need to be handled
         [[maybe_unused]] const auto succeeded = close(handle) == 0;
+        assert(succeeded || errno == EINTR);
 #else
     #error close_os_handle is not implemented for this OS
 #endif
-        assert(succeeded);
     }
 };
 
@@ -219,23 +220,41 @@ struct pipe_handles {
     if (pipe(read_and_write_descriptors.data()) != 0) {
         throw_last_system_error("Failed to create a pipe");
     }
-    return {.read{read_and_write_descriptors[0]}, .write{read_and_write_descriptors[1]}};
+    return {.read = unique_os_handle{read_and_write_descriptors[0]},
+            .write = unique_os_handle{read_and_write_descriptors[1]}};
 #endif
 }
 
 inline auto prevent_handle_inheritance(const os_handle handle) -> void {
 #ifdef HINDSIGHT_OS_WINDOWS
-    if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0)) {
+    if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, {})) {
         throw_last_system_error("Failed to prevent handle inheritance");
     }
 #elif defined HINDSIGHT_OS_UNIX
     auto flags = fcntl(handle, F_GETFD);
     if (flags < 0) {
-        throw_last_system_error("Failed to get the current pipe flags");
+        throw_last_system_error("Failed to get the current handle flags");
     }
     flags |= FD_CLOEXEC;
     if (fcntl(handle, F_SETFD, flags) == -1) {
         throw_last_system_error("Failed to prevent handle inheritance");
+    }
+#endif
+}
+
+inline auto allow_handle_inheritance(const os_handle handle) -> void {
+#ifdef HINDSIGHT_OS_WINDOWS
+    if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) {
+        throw_last_system_error("Failed to allow handle inheritance");
+    }
+#elif defined HINDSIGHT_OS_UNIX
+    auto flags = fcntl(handle, F_GETFD);
+    if (flags < 0) {
+        throw_last_system_error("Failed to get the current handle flags");
+    }
+    flags &= ~FD_CLOEXEC;
+    if (fcntl(handle, F_SETFD, flags) == -1) {
+        throw_last_system_error("Failed to allow handle inheritance");
     }
 #endif
 }

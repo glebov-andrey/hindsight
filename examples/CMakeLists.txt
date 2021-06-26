@@ -23,6 +23,6 @@ set_target_clang_tidy(hindsight_print_stacktrace_here)
 
 target_sources(hindsight_print_stacktrace_here PRIVATE print_stacktrace_here.cpp)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_subdirectory(out_of_process)
 endif ()

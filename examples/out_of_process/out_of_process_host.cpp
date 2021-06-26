@@ -18,12 +18,12 @@
 
 #include <hindsight/config.hpp>
 
+#include <cassert>
 #include <cstdlib>
 #include <exception>
 
 #ifdef HINDSIGHT_OS_WINDOWS
     #include <array>
-    #include <cassert>
     #include <concepts>
     #include <cstddef>
     #include <functional>
@@ -32,6 +32,18 @@
     #include <utility>
 
     #include <Windows.h>
+#elif defined HINDSIGHT_OS_LINUX
+    #include <algorithm>
+    #include <cerrno>
+    #include <charconv>
+    #include <initializer_list>
+    #include <memory>
+    #include <string_view>
+    #include <system_error>
+
+    #include <dirent.h>
+    #include <sys/wait.h>
+    #include <unistd.h>
 #endif
 
 #include <hindsight/stacktrace.hpp>
@@ -64,6 +76,89 @@ private:
 
 template<std::invocable Fn>
 explicit finally(Fn &&fn) -> finally<std::decay_t<Fn>>;
+
+#endif
+
+#ifdef HINDSIGHT_OS_LINUX
+
+struct close_c_dir {
+    auto operator()(DIR *const ptr) const noexcept {
+        [[maybe_unused]] const auto result = closedir(ptr);
+        assert(result == 0);
+    }
+};
+
+using unique_c_dir = std::unique_ptr<DIR, close_c_dir>;
+
+void close_all_descriptors_except(const std::initializer_list<int> keep_open) {
+    // Ideally we'd just use close_range (https://man7.org/linux/man-pages/man2/close_range.2.html) but that would
+    // require at least Linux 5.9 which is currently unreasonable (as of 2021-06).
+    // Instead we iterate over all open descriptors (in /proc/self/fd) and close them (unless requested to keep open).
+    auto fd_dir = unique_c_dir{opendir("/proc/self/fd")};
+    if (!fd_dir) {
+        throw_last_system_error("Failed to open /proc/self/fd to iterate open file descriptors");
+    }
+    const auto proc_fd_descriptor = dirfd(fd_dir.get());
+    if (proc_fd_descriptor < 0) {
+        throw_last_system_error("Failed to get the file descriptor of the open /proc/self/fd directory");
+    }
+    while (true) {
+        errno = 0;
+        const auto *dir_entry = readdir(fd_dir.get());
+        if (!dir_entry) {
+            if (errno) {
+                throw_last_system_error("Failed to read the next directory entry from /proc/self/fd");
+            }
+            break;
+        }
+        const auto is_symlink = dir_entry->d_type == DT_LNK;
+        if (is_symlink) {
+            const auto fd_str = std::string_view{dir_entry->d_name};
+            const auto *const fd_str_end = fd_str.data() + fd_str.size();
+            auto fd = -1;
+            auto result = std::from_chars(fd_str.data(), fd_str_end, fd);
+            if (result.ec == std::errc{} && result.ptr != fd_str_end) {
+                result.ec = std::errc::invalid_argument;
+            }
+            if (result.ec != std::errc{}) {
+                throw std::system_error{make_error_code(result.ec),
+                                        "Failed to parse an entry in /proc/self/fd as an int"};
+            }
+            const auto should_close = fd != proc_fd_descriptor && std::ranges::find(keep_open, fd) == keep_open.end();
+            if (should_close) {
+                close(fd);
+            }
+        }
+    }
+}
+
+// In "real" code this all has to be async-signal-safe (because the application might be multi-threaded).
+[[noreturn]] void run_child_process(const int stdin_pipe_read_fd, const int proc_maps_fd) try {
+    while (dup2(stdin_pipe_read_fd, STDIN_FILENO) != 0) { // clears FD_CLOEXEC on STDIN_FILENO
+        if (errno == EINTR) {
+            continue;
+        }
+        throw_last_system_error("Failed to duplicate the watchdog's standard input handle");
+    }
+    allow_handle_inheritance(STDERR_FILENO); // in case FD_CLOEXEC is set on STDERR_FILENO
+
+    close_all_descriptors_except({STDIN_FILENO, STDERR_FILENO, proc_maps_fd});
+
+    constexpr auto watchdog_path = "./out_of_process_watchdog";
+    char *const watchdog_argv = nullptr;
+    if (execve(watchdog_path, &watchdog_argv, nullptr) != 0) {
+        throw_last_system_error("Failed to execute \"{}\"", watchdog_path);
+    }
+    #ifdef __GNUC__
+    __builtin_unreachable();
+    #endif
+} catch (const std::exception &e) {
+    print_log("WATCHDOG: {}\n", e.what());
+    std::abort();
+} catch (...) {
+    print_log("WATCHDOG: <unknown exception>\n");
+    std::abort();
+}
 
 #endif
 
@@ -148,6 +243,26 @@ auto run() -> int try {
     }
     print_log("HOST: Written the host process handle to the watchdog's standard input ({})\n",
               host_process_handle.get());
+#elif defined HINDSIGHT_OS_LINUX
+    auto proc_maps = unique_os_handle{open("/proc/self/maps", O_RDONLY)};
+    if (!proc_maps) {
+        throw_last_system_error("Failed to open /proc/self/maps");
+    }
+
+    const auto fork_result = fork();
+    if (fork_result < 0) {
+        throw_last_system_error("Failed to fork the host process");
+    }
+    if (fork_result == 0) {
+        run_child_process(watchdog_stdin_pipe.read.get(), proc_maps.get());
+    }
+
+    if (!write_to_handle(watchdog_stdin_pipe.write.get(), proc_maps.get())) {
+        throw_last_system_error(
+                "Failed to write the host process /proc/self/maps handle to the watchdog's standard input");
+    }
+    print_log("HOST: Written the host process /proc/self/maps handle to the watchdog's standard input ({})\n",
+              proc_maps.get());
 #else
     #error HOST is not implemented for this OS
 #endif
@@ -171,8 +286,22 @@ auto run() -> int try {
     if (!GetExitCodeProcess(watchdog_process.get(), &watchdog_exit_code)) {
         throw_last_system_error("Failed to get the watchdog process exit code");
     }
-    print_log("HOST: The watchdog process exited with code {}", watchdog_exit_code);
+#elif defined HINDSIGHT_OS_LINUX
+    const auto watchdog_pid = fork_result;
+    auto watchdog_status = 0;
+    do {
+        while (waitpid(watchdog_pid, &watchdog_status, 0) != watchdog_pid) {
+            if (errno == EINTR) {
+                continue;
+            }
+            throw_last_system_error("Failed to wait for the watchdog process to exit");
+        }
+    } while (!WIFEXITED(watchdog_status));
+    const auto watchdog_exit_code = WEXITSTATUS(watchdog_status);
+#else
+    #error HOST is not implemented for this OS
 #endif
+    print_log("HOST: The watchdog process exited with code {}", watchdog_exit_code);
     return EXIT_SUCCESS;
 } catch (const std::exception &e) {
     print_log("HOST: {}\n", e.what());
