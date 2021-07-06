@@ -26,6 +26,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdio>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <span>
@@ -91,16 +92,16 @@ struct close_os_handle {
 using unique_os_handle = std::unique_ptr<os_handle, close_os_handle>;
 
 
-template<typename S, typename... Args>
-[[noreturn]] auto throw_runtime_error(const S &format_str, Args &&...args) -> void {
+template<typename... Args>
+[[noreturn]] auto throw_runtime_error(const fmt::format_string<Args...> format_str, Args &&...args) -> void {
     auto fmt_buffer = fmt::memory_buffer{};
-    fmt::format_to(fmt_buffer, format_str, std::forward<Args>(args)...);
+    fmt::format_to(std::back_inserter(fmt_buffer), format_str, std::forward<Args>(args)...);
     fmt_buffer.push_back('\0');
     throw std::runtime_error{fmt_buffer.data()};
 }
 
-template<typename S, typename... Args>
-[[noreturn]] auto throw_last_system_error(const S &format_str, Args &&...args) -> void {
+template<typename... Args>
+[[noreturn]] auto throw_last_system_error(const fmt::format_string<Args...> format_str, Args &&...args) -> void {
 #ifdef HINDSIGHT_OS_WINDOWS
     const auto last_error = static_cast<int>(GetLastError());
 #elif defined HINDSIGHT_OS_UNIX
@@ -109,13 +110,13 @@ template<typename S, typename... Args>
     #error throw_last_system_error is not implemented for this OS
 #endif
     auto fmt_buffer = fmt::memory_buffer{};
-    fmt::format_to(fmt_buffer, format_str, std::forward<Args>(args)...);
+    fmt::format_to(std::back_inserter(fmt_buffer), format_str, std::forward<Args>(args)...);
     fmt_buffer.push_back('\0');
     throw std::system_error{last_error, std::system_category(), fmt_buffer.data()};
 }
 
-template<typename S, typename... Args>
-void print_log(const S &format_str, Args &&...args) {
+template<typename... Args>
+void print_log(const fmt::format_string<Args...> format_str, Args &&...args) {
     fmt::print(stderr, format_str, std::forward<Args>(args)...);
 }
 

@@ -23,7 +23,6 @@ project(
     HOMEPAGE_URL "https://github.com/glebov-andrey/hindsight"
     LANGUAGES CXX)
 
-option(HINDSIGHT_INCLUDE_CONANBUILDINFO "Include conanbuildinfo.cmake" OFF)
 option(HINDSIGHT_WITH_FMT "Enable native fmt support" OFF)
 option(HINDSIGHT_BUILD_TESTS "Build tests" ON)
 option(HINDSIGHT_BUILD_EXAMPLES "Build examples" OFF)
@@ -32,11 +31,7 @@ option(HINDSIGHT_ENABLE_COVERAGE "Enable coverage" OFF)
 option(HINDSIGHT_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 option(HINDSIGHT_ENABLE_LLD_THINLTO_CACHE "Enable lld ThinLTO cache" OFF)
 
-list(PREPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
-if (HINDSIGHT_INCLUDE_CONANBUILDINFO)
-    include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-    conan_basic_setup(TARGETS)
-endif ()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
 
 include(tools/cmake/default_options.cmake)
 include(tools/cmake/coverage.cmake)
@@ -44,7 +39,7 @@ include(tools/cmake/clang_tidy.cmake)
 
 find_package(Threads REQUIRED)
 if (HINDSIGHT_WITH_FMT)
-    find_package(fmt REQUIRED)
+    find_package(fmt 8.0.1 REQUIRED)
 endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(DIA REQUIRED)

@@ -150,8 +150,11 @@ template<typename CharT>
 struct fmt::formatter<hindsight::stacktrace_entry, CharT>
         : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_fmt_format_error> {
     template<typename OutputIt>
-    auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const {
-        return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<CharT>, entry.native_handle());
+    constexpr auto format(const hindsight::stacktrace_entry entry,
+                          basic_format_context<OutputIt, CharT> &context) const {
+        return fmt::format_to(context.out(),
+                              hindsight::detail::stacktrace_entry_fmt_string<CharT>,
+                              entry.native_handle());
     }
 };
 

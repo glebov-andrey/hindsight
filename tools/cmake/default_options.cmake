@@ -14,6 +14,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
+
 add_library(hindsight_default_options INTERFACE)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -23,7 +27,8 @@ endif ()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(hindsight_default_options INTERFACE -W4)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
-    target_compile_options(hindsight_default_options INTERFACE -W4 -Wpedantic)
+    # -fno-show-column is a workaround for CLion not parsing the "file(line,column)" format
+    target_compile_options(hindsight_default_options INTERFACE -W4 -Wpedantic -clang:-fno-show-column)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(hindsight_default_options INTERFACE -Wall -Wextra -Wpedantic)
 endif ()

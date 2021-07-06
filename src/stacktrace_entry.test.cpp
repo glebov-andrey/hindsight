@@ -32,6 +32,7 @@
 HINDSIGHT_PRAGMA_MSVC("warning(push)")
 HINDSIGHT_PRAGMA_MSVC("warning(disable : 4389)") // '==': signed/unsigned mismatch (comparing char32_t to char)
     #include <fmt/format.h>
+    #include <fmt/xchar.h>
 HINDSIGHT_PRAGMA_MSVC("warning(pop)")
 #endif
 
@@ -192,7 +193,9 @@ TEST_CASE("stacktrace_entry's fmt::formatter specialization adds zero-padding") 
 
 TEST_CASE("stacktrace_entry's fmt::formatter specialization throws for a non-empty format specification") {
     constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
+    #ifndef FMT_HAS_CONSTEVAL // with consteval this just doesn't compile
     REQUIRE_THROWS_AS(fmt::format("{:x}", entry), fmt::format_error);
+    #endif
     REQUIRE_THROWS_AS(fmt::format(L"{:x}", entry), fmt::format_error);
     REQUIRE_THROWS_AS(fmt::format(u8"{:x}", entry), fmt::format_error);
     REQUIRE_THROWS_AS(fmt::format(u"{:x}", entry), fmt::format_error);
