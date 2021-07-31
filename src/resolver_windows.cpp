@@ -173,7 +173,7 @@ public:
     explicit impl(from_process_handle_t /* from_process_handle_tag */, const HANDLE process) noexcept
             : m_module_map{std::in_place_type<windows::remote_module_map>, process} {}
 
-    auto resolve(const stacktrace_entry entry, const resolve_cb callback) -> void {
+    auto resolve(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
         const auto on_failure = [&] { callback({entry, false, {}}); };
 
         auto session = session_for_entry(entry);
@@ -273,8 +273,12 @@ resolver::resolver() : m_impl{std::make_shared<impl>()} {}
 resolver::resolver(const from_process_handle_t from_process_handle_tag, const HANDLE process)
         : m_impl{std::make_shared<impl>(from_process_handle_tag, process)} {}
 
-auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
-    m_impl->resolve(entry, callback);
+auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
+    if (m_impl) {
+        m_impl->resolve(entry, callback);
+    } else {
+        callback({entry, false, {}});
+    }
 }
 
 } // namespace hindsight

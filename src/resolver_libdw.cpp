@@ -343,13 +343,58 @@ auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
 }
 
 
+namespace {
+
+struct callback_state {
+    const stacktrace_entry entry;
+    const detail::resolve_cb callback;
+
+    bool entry_issued = false;
+    bool done = false;
+
+    auto submit(logical_stacktrace_entry &&logical) -> bool {
+        if (!done) {
+            done = callback(std::move(logical));
+            entry_issued = true;
+        }
+        return done;
+    }
+
+    auto on_failure() -> void {
+        if (!entry_issued) {
+            done = callback({{}, entry, false, false, nullptr, nullptr, 0, 0, nullptr});
+            entry_issued = true;
+        }
+    }
+};
+
+} // namespace
+
 class resolver::impl : public std::enable_shared_from_this<impl> {
 public:
-    explicit impl() noexcept : m_dwfl_session{create_initial_session()} {}
+    explicit impl(unique_c_file proc_maps, unique_dwfl_session dwfl_session)
+            : m_proc_maps{std::move(proc_maps)},
+              m_dwfl_session{(assert(dwfl_session), std::move(dwfl_session))} {}
 
-    explicit impl(from_proc_maps_t /* from_proc_maps_tag */, const int proc_maps_descriptor) noexcept
-            : m_proc_maps{c_file_from_fd(proc_maps_descriptor)},
-              m_dwfl_session{m_proc_maps ? create_initial_session() : nullptr} {}
+    [[nodiscard]] static auto create() -> std::shared_ptr<impl> {
+        auto session = create_initial_session(nullptr);
+        if (session) {
+            return std::make_shared<impl>(nullptr, std::move(session));
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] static auto create(from_proc_maps_t /* from_proc_maps_tag */, const int proc_maps_descriptor)
+            -> std::shared_ptr<impl> {
+        auto proc_maps = c_file_from_fd(proc_maps_descriptor);
+        if (proc_maps) {
+            auto session = create_initial_session(proc_maps.get());
+            if (session) {
+                return std::make_shared<impl>(std::move(proc_maps), std::move(session));
+            }
+        }
+        return nullptr;
+    }
 
     impl(const impl &other) = delete;
     impl(impl &&other) = delete;
@@ -359,21 +404,14 @@ public:
     auto operator=(const impl &other) = delete;
     auto operator=(impl &&other) = delete;
 
-    auto resolve(const stacktrace_entry entry, const resolve_cb callback) -> void {
-        auto cb_state = callback_state{.entry = entry, .callback = callback};
-
-        if (!is_initialized()) {
-            cb_state.on_failure();
-            return;
-        }
-
+    auto resolve(callback_state &cb_state) -> void {
         if (try_resolve_in_existing_modules(cb_state)) {
             return;
         }
 
         m_dwfl_session.with_lock([&](const unique_dwfl_session &session) noexcept {
             dwfl_report_begin_add(session.get());
-            report_mappings(*session);
+            report_mappings(m_proc_maps.get(), *session);
             dwfl_report_end(session.get(), nullptr, nullptr);
         });
 
@@ -388,41 +426,18 @@ private:
     const unique_c_file m_proc_maps{};
     const util::locked<unique_dwfl_session, std::shared_mutex> m_dwfl_session;
 
-    struct callback_state {
-        const stacktrace_entry entry;
-        const resolve_cb callback;
-
-        bool entry_issued = false;
-        bool done = false;
-
-        auto submit(logical_stacktrace_entry &&logical) -> bool {
-            if (!done) {
-                done = callback(std::move(logical));
-                entry_issued = true;
-            }
-            return done;
-        }
-
-        auto on_failure() -> void {
-            if (!entry_issued) {
-                done = callback({{}, entry, false, false, nullptr, nullptr, 0, 0, nullptr});
-                entry_issued = true;
-            }
-        }
-    };
-
-    auto report_mappings(Dwfl &session) const noexcept -> bool {
-        const auto result = m_proc_maps ? dwfl_linux_proc_maps_report(&session, m_proc_maps.get())
-                                        : dwfl_linux_proc_report(&session, getpid());
+    static auto report_mappings(std::FILE *const proc_maps, Dwfl &session) noexcept -> bool {
+        const auto result = proc_maps ? dwfl_linux_proc_maps_report(&session, proc_maps)
+                                      : dwfl_linux_proc_report(&session, getpid());
         return result == 0;
     }
 
-    [[nodiscard]] auto create_initial_session() const noexcept -> unique_dwfl_session {
+    [[nodiscard]] static auto create_initial_session(std::FILE *const proc_maps) noexcept -> unique_dwfl_session {
         auto session = unique_dwfl_session{dwfl_begin(&dwfl_session_callbacks)};
 
         if (session) {
             dwfl_report_begin(session.get());
-            const auto success = report_mappings(*session);
+            const auto success = report_mappings(proc_maps, *session);
             dwfl_report_end(session.get(), nullptr, nullptr);
             if (!success) {
                 session.reset();
@@ -432,12 +447,7 @@ private:
         return session;
     }
 
-    [[nodiscard]] auto is_initialized() const noexcept -> bool {
-        // This is safe because the pointer itself is never modified (ensured by the member being const).
-        return m_dwfl_session.unsafe_get() != nullptr;
-    }
-
-    // Returns whether or not a module was found for `entry`.
+    // Returns whether a module was found for `entry`.
     [[nodiscard]] auto try_resolve_in_existing_modules(callback_state &cb_state) const -> bool {
         auto *const module = m_dwfl_session.with_shared_lock([&](const unique_dwfl_session &session) {
             return dwfl_addrmodule(session.get(), cb_state.entry.native_handle());
@@ -549,13 +559,18 @@ private:
     }
 };
 
-resolver::resolver() : m_impl{std::make_shared<impl>()} {}
+resolver::resolver() : m_impl{impl::create()} {}
 
 resolver::resolver(const from_proc_maps_t from_proc_maps_tag, const int proc_maps_descriptor)
-        : m_impl{std::make_shared<impl>(from_proc_maps_tag, proc_maps_descriptor)} {}
+        : m_impl{impl::create(from_proc_maps_tag, proc_maps_descriptor)} {}
 
-auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
-    m_impl->resolve(entry, callback);
+auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
+    auto cb_state = callback_state{.entry = entry, .callback = callback};
+    if (m_impl) {
+        m_impl->resolve(cb_state);
+    } else {
+        cb_state.on_failure();
+    }
 }
 
 } // namespace hindsight

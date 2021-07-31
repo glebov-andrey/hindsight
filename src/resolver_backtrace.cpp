@@ -124,7 +124,7 @@ auto logical_stacktrace_entry::set_inline(impl_tag && /* impl */) noexcept -> vo
 
 resolver::resolver() = default;
 
-auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
+auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
     const auto on_failure = [&] { callback({{}, entry, false, {}, {}}); };
 
     auto *const global_state = get_backtrace_state();
@@ -135,7 +135,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
 
     struct cb_state {
         const stacktrace_entry entry;
-        const resolve_cb callback;
+        const detail::resolve_cb callback;
         std::optional<logical_stacktrace_entry> buffered_entry;
         std::exception_ptr exception;
 

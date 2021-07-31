@@ -169,6 +169,14 @@ inline auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noex
 #endif
 
 
+namespace detail {
+
+// Returns true if done
+using resolve_cb = tl::function_ref<bool(logical_stacktrace_entry &&logical)>;
+
+} // namespace detail
+
+
 #ifdef HINDSIGHT_OS_WINDOWS
 
 struct from_process_handle_t {
@@ -240,10 +248,7 @@ public:
 #endif
 
 private:
-    // Returns true if done
-    using resolve_cb = tl::function_ref<bool(logical_stacktrace_entry &&logical)>;
-
-    auto resolve_impl(stacktrace_entry entry, resolve_cb callback) -> void;
+    auto resolve_impl(stacktrace_entry entry, detail::resolve_cb callback) -> void;
 
 #if defined HINDSIGHT_OS_WINDOWS || defined HINDSIGHT_OS_LINUX
     class impl;

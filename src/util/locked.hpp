@@ -80,9 +80,6 @@ public:
         return std::invoke(std::forward<Fn>(fn), m_value);
     }
 
-    [[nodiscard]] auto unsafe_get() const noexcept -> const T & { return m_value; }
-    [[nodiscard]] auto unsafe_get() noexcept -> T & { return m_value; }
-
 private:
     mutable Lock m_lock{};
     T m_value;
