@@ -24,9 +24,11 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
-#include <ranges>
 #include <string>
 #include <utility>
+#ifdef HINDSIGHT_HAS_STD_RANGES
+    #include <ranges>
+#endif
 #ifdef HINDSIGHT_OS_WINDOWS
     #include <array>
     #include <cstddef>
@@ -243,6 +245,7 @@ public:
         }
     }
 
+#ifdef HINDSIGHT_HAS_STD_RANGES
     template<std::ranges::output_range<logical_stacktrace_entry> Range>
     [[nodiscard]] auto resolve(const stacktrace_entry entry, Range &&range) {
         if constexpr (std::ranges::forward_range<Range>) {
@@ -253,6 +256,7 @@ public:
             resolve(entry, std::ranges::begin(range), std::ranges::end(range));
         }
     }
+#endif
 
 private:
     // Returns true if done

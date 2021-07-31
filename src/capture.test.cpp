@@ -16,13 +16,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <hindsight/config.hpp>
+
 #include <algorithm>
 #include <concepts>
 #include <forward_list>
 #include <iterator>
-#include <ranges>
 #include <span>
 #include <vector>
+#ifdef HINDSIGHT_HAS_STD_RANGES
+    #include <ranges>
+#endif
 
 #include <catch2/catch.hpp>
 
@@ -55,13 +59,6 @@ struct easily_reachable_sentinel_t {
 };
 
 constexpr auto easily_reachable_sentinel = easily_reachable_sentinel_t{};
-
-#if defined __clang__ && defined __GLIBCXX__
-    // These bugs are related: https://bugs.llvm.org/show_bug.cgi?id=47509,
-    // https://bugs.llvm.org/show_bug.cgi?id=46746, https://gcc.gnu.org/bugzilla/show_bug.cgi?id=97120.
-    #pragma message "Standard range views are broken with Clang and libstdc++. Disabling some tests."
-    #define HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
-#endif
 
 } // namespace
 
@@ -140,11 +137,11 @@ TEST_CASE("capture_stacktrace_from_mutable_context stops capturing when the rang
     REQUIRE(last_captured == less_entries.end());
 }
 
+#ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace_from_mutable_context captures entries into ranges (range)") {
     native_context_type context;
     HINDSIGHT_TESTS_GET_CONTEXT(context);
 
-#ifndef HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
     auto all_entries = std::vector<stacktrace_entry>{};
     {
         auto tmp_context = context;
@@ -164,7 +161,6 @@ TEST_CASE("capture_stacktrace_from_mutable_context captures entries into ranges 
         REQUIRE(captured_entries.begin() == entries.begin());
         REQUIRE(std::ranges::equal(captured_entries, all_entries));
     }
-#endif
 
     {
         auto tmp_context = context;
@@ -174,6 +170,7 @@ TEST_CASE("capture_stacktrace_from_mutable_context captures entries into ranges 
         [[maybe_unused]] const auto dangling = capture_stacktrace_from_mutable_context(tmp_context, list_t(16));
     }
 }
+#endif
 
 TEST_CASE("capture_stacktrace captures at least one entry") {
     auto entries = std::vector<stacktrace_entry>{};
@@ -223,8 +220,8 @@ TEST_CASE("capture_stacktrace stops capturing when the range is full") {
     REQUIRE(last_captured == less_entries.end());
 }
 
+#ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
-#ifndef HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
     {
         auto entries = std::vector<stacktrace_entry>{};
         const auto out_range = std::ranges::subrange{std::back_inserter(entries), std::unreachable_sentinel};
@@ -242,7 +239,6 @@ TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
         REQUIRE(captured_entries.begin() == entries.begin());
         REQUIRE(!captured_entries.empty());
     }
-#endif
 
     {
         using list_t = std::forward_list<stacktrace_entry>;
@@ -250,6 +246,7 @@ TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
         [[maybe_unused]] const auto dangling = capture_stacktrace(list_t(16));
     }
 }
+#endif
 
 TEST_CASE("capture_stacktrace_from_context captures at least one entry for a local context") {
     native_context_type context;
@@ -314,11 +311,11 @@ TEST_CASE("capture_stacktrace_from_context stops capturing when the range is ful
     REQUIRE(last_captured == less_entries.end());
 }
 
+#ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace_from_context captures entries info ranges (range)") {
     native_context_type context;
     HINDSIGHT_TESTS_GET_CONTEXT(context);
 
-#ifndef HINDSIGHT_TESTS_DISABLE_RANGE_VIEW_TESTS
     auto all_entries = std::vector<stacktrace_entry>{};
     {
         const auto out_range = std::ranges::subrange{std::back_inserter(all_entries), std::unreachable_sentinel};
@@ -336,7 +333,6 @@ TEST_CASE("capture_stacktrace_from_context captures entries info ranges (range)"
         REQUIRE(captured_entries.begin() == entries.begin());
         REQUIRE(std::ranges::equal(captured_entries, all_entries));
     }
-#endif
 
     {
         using list_t = std::forward_list<stacktrace_entry>;
@@ -345,5 +341,6 @@ TEST_CASE("capture_stacktrace_from_context captures entries info ranges (range)"
         [[maybe_unused]] const auto dangling = capture_stacktrace_from_context(context, list_t(16));
     }
 }
+#endif
 
 } // namespace hindsight

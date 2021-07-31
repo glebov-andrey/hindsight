@@ -23,4 +23,4 @@ set(HINDSIGHT_PUBLIC_HEADERS
     hindsight/stacktrace_entry.hpp
     PARENT_SCOPE)
 
-target_sources(hindsight PRIVATE ${HINDSIGHT_PUBLIC_HEADERS})
+target_sources(hindsight_obj PRIVATE ${HINDSIGHT_PUBLIC_HEADERS})

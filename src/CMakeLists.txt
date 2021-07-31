@@ -15,7 +15,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 target_sources(
-    hindsight
+    hindsight_obj
     PRIVATE # cmake-format: sort
             capture_unix.cpp
             capture_windows.cpp
@@ -32,7 +32,7 @@ target_sources(
             util/locked.hpp)
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_sources(
-        hindsight
+        hindsight_obj
         PRIVATE # cmake-format: sort
                 windows/com.cpp
                 windows/com.hpp
@@ -42,7 +42,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
                 windows/module_map.hpp)
 else ()
     target_sources(
-        hindsight
+        hindsight_obj
         PRIVATE # cmake-format: sort
                 itanium_abi/demangle.cpp
                 itanium_abi/demangle.hpp
@@ -56,6 +56,7 @@ if (HINDSIGHT_BUILD_TESTS)
         PRIVATE # cmake-format: sort
                 capture.test.cpp
                 capture_signal.test.cpp
+                resolver.test.cpp
                 stacktrace_entry.test.cpp
                 util/locked.test.cpp)
     if (NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
