@@ -27,8 +27,6 @@
 #include <hindsight/capture.hpp>
 #include <hindsight/resolver.hpp>
 
-#include "resolver_windows_impl.hpp"
-
 namespace hindsight {
 
 auto print_stacktrace(std::ostream &stream, const std::span<const stacktrace_entry> entries) -> void {

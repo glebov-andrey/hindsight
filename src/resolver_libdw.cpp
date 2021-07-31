@@ -359,8 +359,8 @@ public:
     auto operator=(const impl &other) = delete;
     auto operator=(impl &&other) = delete;
 
-    auto resolve(const stacktrace_entry entry, resolve_cb *const callback, void *const user_data) -> void {
-        auto cb_state = callback_state{.entry = entry, .callback = callback, .user_data = user_data};
+    auto resolve(const stacktrace_entry entry, const resolve_cb callback) -> void {
+        auto cb_state = callback_state{.entry = entry, .callback = callback};
 
         if (!is_initialized()) {
             cb_state.on_failure();
@@ -390,15 +390,14 @@ private:
 
     struct callback_state {
         const stacktrace_entry entry;
-        resolve_cb *const callback;
-        void *const user_data;
+        const resolve_cb callback;
 
         bool entry_issued = false;
         bool done = false;
 
         auto submit(logical_stacktrace_entry &&logical) -> bool {
             if (!done) {
-                done = callback(std::move(logical), user_data);
+                done = callback(std::move(logical));
                 entry_issued = true;
             }
             return done;
@@ -406,7 +405,7 @@ private:
 
         auto on_failure() -> void {
             if (!entry_issued) {
-                done = callback({{}, entry, false, false, nullptr, nullptr, 0, 0, nullptr}, user_data);
+                done = callback({{}, entry, false, false, nullptr, nullptr, 0, 0, nullptr});
                 entry_issued = true;
             }
         }
@@ -555,10 +554,8 @@ resolver::resolver() : m_impl{std::make_shared<impl>()} {}
 resolver::resolver(const from_proc_maps_t from_proc_maps_tag, const int proc_maps_descriptor)
         : m_impl{std::make_shared<impl>(from_proc_maps_tag, proc_maps_descriptor)} {}
 
-resolver::~resolver() = default;
-
-auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const callback, void *const user_data) -> void {
-    m_impl->resolve(entry, callback, user_data);
+auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
+    m_impl->resolve(entry, callback);
 }
 
 } // namespace hindsight

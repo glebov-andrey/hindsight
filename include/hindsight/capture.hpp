@@ -30,6 +30,8 @@
     #include <ranges>
 #endif
 
+#include <tl/function_ref.hpp>
+
 #include <hindsight/stacktrace_entry.hpp>
 
 
@@ -50,58 +52,38 @@ using native_context_type = ucontext_t;
 namespace detail {
 
 // Returns true if done
-using capture_stacktrace_cb = bool(stacktrace_entry entry, void *user_data);
+using capture_stacktrace_cb = tl::function_ref<bool(stacktrace_entry entry)>;
 
 HINDSIGHT_API auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                                            std::size_t entries_to_skip,
-                                                           capture_stacktrace_cb *callback,
-                                                           void *user_data) -> void;
+                                                           capture_stacktrace_cb callback) -> void;
 
-HINDSIGHT_API auto capture_stacktrace(std::size_t entries_to_skip, capture_stacktrace_cb *callback, void *user_data)
-        -> void;
+HINDSIGHT_API auto capture_stacktrace(std::size_t entries_to_skip, capture_stacktrace_cb callback) -> void;
 
 HINDSIGHT_API auto capture_stacktrace_from_context(const native_context_type &context,
                                                    std::size_t entries_to_skip,
-                                                   capture_stacktrace_cb *callback,
-                                                   void *user_data) -> void;
+                                                   capture_stacktrace_cb callback) -> void;
 
-template<std::invocable<std::size_t, capture_stacktrace_cb *, void *> ImplFunction,
+template<std::invocable<std::size_t, capture_stacktrace_cb> ImplFunction,
          std::output_iterator<stacktrace_entry> It,
          std::sentinel_for<It> Sentinel>
-[[nodiscard]] auto capture_stacktrace_iterator_adapter(const ImplFunction impl_function,
+[[nodiscard]] auto capture_stacktrace_iterator_adapter(ImplFunction &&impl_function,
                                                        It first,
-                                                       Sentinel last,
+                                                       const Sentinel last,
                                                        const std::size_t entries_to_skip)
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
-    if (first == last) {
-        if constexpr (std::forward_iterator<It>) {
-            HINDSIGHT_PRAGMA_GCC("GCC diagnostic push") // NRVO can't happen because 'first' is a function parameter
-            HINDSIGHT_PRAGMA_GCC("GCC diagnostic ignored \"-Wredundant-move\"")
-            return std::move(first);
-            HINDSIGHT_PRAGMA_GCC("GCC diagnostic pop")
-        } else {
-            return;
-        }
+    if (first != last) {
+        std::forward<ImplFunction>(impl_function)(entries_to_skip, [&](const stacktrace_entry entry) -> bool {
+            *first++ = entry;
+            return first == last;
+        });
     }
 
-    struct cb_state {
-        HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
-        HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wunknown-attributes\"")
-        [[no_unique_address]] It first;
-        [[no_unique_address]] const Sentinel last;
-        HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
-    } state{.first = std::move(first), .last = std::move(last)};
-    impl_function(
-            entries_to_skip,
-            [](const stacktrace_entry entry, void *const state_ptr) {
-                auto &state = *static_cast<cb_state *>(state_ptr);
-                *state.first++ = entry;
-                return state.first == state.last;
-            },
-            &state);
-
     if constexpr (std::forward_iterator<It>) {
-        return std::move(state.first);
+        HINDSIGHT_PRAGMA_GCC("GCC diagnostic push") // NRVO can't happen because 'first' is a function parameter
+        HINDSIGHT_PRAGMA_GCC("GCC diagnostic ignored \"-Wredundant-move\"")
+        return std::move(first);
+        HINDSIGHT_PRAGMA_GCC("GCC diagnostic pop")
     }
 }
 
@@ -163,6 +145,8 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
 [[nodiscard]] auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                                            It first,
                                                            Sentinel last,
+                                                           // clang-tidy 12.0 warns even though this is a definition
+                                                           // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
                                                            const std::size_t entries_to_skip = 0)
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
     return detail::capture_stacktrace_iterator_adapter(

@@ -124,8 +124,8 @@ auto logical_stacktrace_entry::set_inline(impl_tag && /* impl */) noexcept -> vo
 
 resolver::resolver() = default;
 
-auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const callback, void *const user_data) -> void {
-    const auto on_failure = [&] { callback({{}, entry, false, {}, {}}, user_data); };
+auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
+    const auto on_failure = [&] { callback({{}, entry, false, {}, {}}); };
 
     auto *const global_state = get_backtrace_state();
     if (!global_state) {
@@ -135,8 +135,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const call
 
     struct cb_state {
         const stacktrace_entry entry;
-        resolve_cb *const callback;
-        void *const user_data;
+        const resolve_cb callback;
         std::optional<logical_stacktrace_entry> buffered_entry;
         std::exception_ptr exception;
 
@@ -148,17 +147,13 @@ auto resolver::resolve_impl(const stacktrace_entry entry, resolve_cb *const call
                 if (is_inline) {
                     buffered_entry->set_inline({});
                 }
-                done = callback(std::move(*buffered_entry), user_data);
+                done = callback(std::move(*buffered_entry));
                 entry_issued = true;
                 buffered_entry.reset();
             }
             return done;
         }
-    } state{.entry = entry,
-            .callback = callback,
-            .user_data = user_data,
-            .buffered_entry = std::nullopt,
-            .exception = nullptr};
+    } state{.entry = entry, .callback = callback, .buffered_entry = std::nullopt, .exception = nullptr};
 
     backtrace_pcinfo(
             global_state,

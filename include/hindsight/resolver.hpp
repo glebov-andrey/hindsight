@@ -37,6 +37,8 @@
     #include <memory>
 #endif
 
+#include <tl/function_ref.hpp>
+
 #include <hindsight/stacktrace.hpp>
 
 #ifdef HINDSIGHT_OS_WINDOWS
@@ -203,45 +205,24 @@ public:
 
     resolver(resolver &&other) noexcept = default;
 
-    ~resolver()
-#if !defined HINDSIGHT_OS_WINDOWS && !defined HINDSIGHT_OS_LINUX
-            = default
-#endif
-            ;
+    ~resolver() = default;
 
     auto operator=(const resolver &other) -> resolver & = delete;
 
     auto operator=(resolver &&other) noexcept -> resolver & = default;
 
     template<std::output_iterator<logical_stacktrace_entry> It, std::sentinel_for<It> Sentinel>
-    [[nodiscard]] auto resolve(const stacktrace_entry entry, It first, Sentinel last)
+    [[nodiscard]] auto resolve(const stacktrace_entry entry, It first, const Sentinel last)
             -> std::conditional_t<std::forward_iterator<It>, It, void> {
-        if (first == last) {
-            if constexpr (std::forward_iterator<It>) {
-                return std::move(first);
-            } else {
-                return;
-            }
+        if (first != last) {
+            resolve_impl(entry, [&](logical_stacktrace_entry &&logical) -> bool {
+                *first++ = std::move(logical);
+                return first == last;
+            });
         }
 
-        struct cb_state {
-            HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
-            HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wunknown-attributes\"")
-            [[no_unique_address]] It first;
-            [[no_unique_address]] const Sentinel last;
-            HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
-        } state{.first = std::move(first), .last = std::move(last)};
-        resolve_impl(
-                entry,
-                [](logical_stacktrace_entry &&logical, void *user_data) {
-                    auto &state = *static_cast<cb_state *>(user_data);
-                    *state.first++ = std::move(logical);
-                    return state.first == state.last;
-                },
-                &state);
-
         if constexpr (std::forward_iterator<It>) {
-            return std::move(state.first);
+            return std::move(first);
         }
     }
 
@@ -260,20 +241,16 @@ public:
 
 private:
     // Returns true if done
-    using resolve_cb = bool(logical_stacktrace_entry &&logical, void *user_data);
+    using resolve_cb = tl::function_ref<bool(logical_stacktrace_entry &&logical)>;
 
-    auto resolve_impl(stacktrace_entry entry, resolve_cb *callback, void *user_data) -> void;
+    auto resolve_impl(stacktrace_entry entry, resolve_cb callback) -> void;
 
 #if defined HINDSIGHT_OS_WINDOWS || defined HINDSIGHT_OS_LINUX
     class impl;
     HINDSIGHT_PRAGMA_MSVC("warning(push)")
-    // std::unique_ptr<impl> needs to have dll-interface to be used by clients of class 'hindsight::resolver'
+    // std::shared_ptr<impl> needs to have dll-interface to be used by clients of class 'hindsight::resolver'
     HINDSIGHT_PRAGMA_MSVC("warning(disable : 4251)")
-    #ifdef HINDSIGHT_OS_WINDOWS
-    std::unique_ptr<impl> m_impl;
-    #elif defined HINDSIGHT_OS_LINUX
     std::shared_ptr<impl> m_impl;
-    #endif
     HINDSIGHT_PRAGMA_MSVC("warning(pop)")
 #endif
 };

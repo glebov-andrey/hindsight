@@ -22,7 +22,6 @@ target_sources(
             resolver_backtrace.cpp
             resolver_libdw.cpp
             resolver_windows.cpp
-            resolver_windows_impl.hpp
             simple.cpp
             stacktrace.cpp
             stacktrace_entry.cpp

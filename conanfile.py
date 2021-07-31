@@ -58,6 +58,7 @@ class HindsightConan(ConanFile):
     }
 
     def requirements(self):
+        self.requires("tl-function-ref/[^1.0.0]")
         if self.options.with_fmt:
             self.requires("fmt/[^8.0.1]")
         if self.settings.os != "Windows":

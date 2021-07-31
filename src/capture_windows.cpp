@@ -54,12 +54,11 @@ auto skip_leaf_function(CONTEXT &context) noexcept {
 
 auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                              std::size_t entries_to_skip,
-                                             capture_stacktrace_cb *const callback,
-                                             void *const user_data) -> void {
+                                             const capture_stacktrace_cb callback) -> void {
     do {
         if (get_instruction_ptr(context)) {
             if (entries_to_skip == 0) {
-                if (callback({from_native_handle, get_instruction_ptr(context) - 1}, user_data)) {
+                if (callback({from_native_handle, get_instruction_ptr(context) - 1})) {
                     break;
                 }
             } else {
@@ -86,19 +85,17 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
     } while (get_instruction_ptr(context) != 0);
 }
 
-auto capture_stacktrace(const std::size_t entries_to_skip, capture_stacktrace_cb *const callback, void *const user_data)
-        -> void {
+auto capture_stacktrace(const std::size_t entries_to_skip, const capture_stacktrace_cb callback) -> void {
     CONTEXT context;
     RtlCaptureContext(&context);
-    capture_stacktrace_from_mutable_context(context, entries_to_skip, callback, user_data);
+    capture_stacktrace_from_mutable_context(context, entries_to_skip, callback);
 }
 
 auto capture_stacktrace_from_context(const native_context_type &context,
                                      const std::size_t entries_to_skip,
-                                     capture_stacktrace_cb *const callback,
-                                     void *const user_data) -> void {
+                                     const capture_stacktrace_cb callback) -> void {
     auto context_copy = context;
-    capture_stacktrace_from_mutable_context(context_copy, entries_to_skip, callback, user_data);
+    capture_stacktrace_from_mutable_context(context_copy, entries_to_skip, callback);
 }
 
 } // namespace hindsight::detail
