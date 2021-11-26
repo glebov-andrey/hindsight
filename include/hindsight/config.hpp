@@ -67,11 +67,9 @@
 #endif
 
 
-// <ranges> is broken with Clang and libstdc++ (as of Clang 12 and GCC 11).
-// 1. Clang does not evaluate concepts lazily: https://bugs.llvm.org/show_bug.cgi?id=50864,
-//    https://bugs.llvm.org/show_bug.cgi?id=47509, https://bugs.llvm.org/show_bug.cgi?id=46746,
-//    https://gcc.gnu.org/bugzilla/show_bug.cgi?id=97120.
-// 2. Since GCC 11 <ranges> omits typename, which Clang does not yet support.
+// <ranges> is broken with Clang and libstdc++ (as of Clang 13 and GCC 11).
+// 1. https://bugs.llvm.org/show_bug.cgi?id=44833.
+// 2. Since GCC 11, <ranges> omits typename, which Clang does not yet support.
 #if !(defined __clang__ && defined __GLIBCXX__)
     #define HINDSIGHT_HAS_STD_RANGES
 #endif

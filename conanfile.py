@@ -27,7 +27,7 @@ class HindsightConan(ConanFile):
     description = "A C++ stack trace library"
     topics = "hindsight", "stacktrace", "stack", "trace", "backtrace", "debug"
     homepage = url
-    generators = "CMakeDeps"
+    generators = "cmake_find_package"
 
     settings = "os", "arch", "compiler", "build_type"
     options = {
@@ -37,9 +37,6 @@ class HindsightConan(ConanFile):
         "build_tests": [False, True],
         "build_examples": [False, True],
         "build_docs": [False, True],
-        "enable_coverage": [False, True],
-        "enable_clang_tidy": [False, True],
-        "enable_lld_thinlto_cache": [False, True],
     }
     default_options = {
         "shared": False,
@@ -48,19 +45,18 @@ class HindsightConan(ConanFile):
         "build_tests": False,
         "build_examples": False,
         "build_docs": False,
-        "enable_coverage": False,
-        "enable_clang_tidy": False,
-        "enable_lld_thinlto_cache": False,
 
         "libunwind:coredump": False,
         "libunwind:ptrace": False,
         "libunwind:setjmp": False,
     }
 
+    _fmt_package_name = "fmt/[^8.0.1]"
+
     def requirements(self):
         self.requires("tl-function-ref/[^1.0.0]")
         if self.options.with_fmt:
-            self.requires("fmt/[^8.0.1]")
+            self.requires(self._fmt_package_name)
         if self.settings.os != "Windows":
             self.requires("libunwind/[^1.5.0]")
         if self.settings.os != "Windows" and self.settings.os != "Linux":
@@ -68,11 +64,11 @@ class HindsightConan(ConanFile):
 
     def build_requirements(self):
         if self.options.build_examples:
-            self.build_requires("fmt/[^8.0.0]", force_host_context=True)
+            self.build_requires(self._fmt_package_name, force_host_context=True)
         if self.options.build_tests:
-            self.build_requires("catch2/[^2.13.6]", force_host_context=True)
+            self.build_requires("catch2/[^2.13.7]", force_host_context=True)
         if self.options.build_docs:
-            self.build_requires("doxygen/[^1.9.1]")
+            self.build_requires("doxygen/[^1.9.2]")
 
     def configure(self):
         if self.settings.os == "Windows" or self.options.shared:
@@ -87,9 +83,6 @@ class HindsightConan(ConanFile):
         toolchain.variables["HINDSIGHT_BUILD_TESTS"] = self.options.build_tests
         toolchain.variables["HINDSIGHT_BUILD_EXAMPLES"] = self.options.build_examples
         toolchain.variables["HINDSIGHT_BUILD_DOCS"] = self.options.build_docs
-        toolchain.variables["HINDSIGHT_ENABLE_COVERAGE"] = self.options.enable_coverage
-        toolchain.variables["HINDSIGHT_ENABLE_CLANG_TIDY"] = self.options.enable_clang_tidy
-        toolchain.variables["HINDSIGHT_ENABLE_LLD_THINLTO_CACHE"] = self.options.enable_lld_thinlto_cache
         toolchain.generate()
 
     scm = {
@@ -124,5 +117,3 @@ class HindsightConan(ConanFile):
     def package_id(self):
         del self.info.options.build_tests
         del self.info.options.build_examples
-        del self.info.options.enable_clang_tidy
-        del self.info.options.enable_lld_thinlto_cache

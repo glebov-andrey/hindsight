@@ -31,6 +31,14 @@ option(HINDSIGHT_ENABLE_COVERAGE "Enable coverage" OFF)
 option(HINDSIGHT_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 option(HINDSIGHT_ENABLE_LLD_THINLTO_CACHE "Enable lld ThinLTO cache" OFF)
 
+message("-- hindsight: Enable native fmt support: ${HINDSIGHT_WITH_FMT}")
+message("-- hindsight: Build tests: ${HINDSIGHT_BUILD_TESTS}")
+message("-- hindsight: Build examples: ${HINDSIGHT_BUILD_EXAMPLES}")
+message("-- hindsight: Build documentation: ${HINDSIGHT_BUILD_DOCS}")
+message("-- hindsight: Enable coverage: ${HINDSIGHT_ENABLE_COVERAGE}")
+message("-- hindsight: Enable clang-tidy: ${HINDSIGHT_ENABLE_CLANG_TIDY}")
+message("-- hindsight: Enable lld ThinLTO cache: ${HINDSIGHT_ENABLE_LLD_THINLTO_CACHE}")
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
 
 include(tools/cmake/default_options.cmake)
@@ -59,7 +67,7 @@ target_include_directories(hindsight_obj PUBLIC include)
 target_compile_features(hindsight_obj PUBLIC cxx_std_20)
 target_link_libraries(hindsight_obj PRIVATE hindsight::default_options hindsight::coverage_options)
 target_link_libraries(hindsight_obj PUBLIC Threads::Threads tl::function-ref)
-fix_static_pdb_name(hindsight_obj hindsight)
+fix_compile_pdb_name(hindsight_obj hindsight)
 set_target_clang_tidy(hindsight_obj)
 if (BUILD_SHARED_LIBS)
     target_compile_definitions(

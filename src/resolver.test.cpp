@@ -52,7 +52,6 @@ auto resolve_and_check(resolver &r, const stacktrace_entry physical) {
 
 TEST_CASE("A default-constructed resolver can be used") {
     const auto trace = capture_stacktrace();
-    REQUIRE(!trace.empty());
 
     auto r = resolver{};
     resolve_and_check(r, trace.front());
@@ -60,7 +59,6 @@ TEST_CASE("A default-constructed resolver can be used") {
 
 TEST_CASE("Both moved-from and moved-to resolvers can be used") {
     const auto trace = capture_stacktrace();
-    REQUIRE(!trace.empty());
 
     auto moved_from = resolver{};
     auto moved_to = std::move(moved_from);

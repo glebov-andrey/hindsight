@@ -44,7 +44,7 @@ endif ()
 
 add_library(hindsight::default_options ALIAS hindsight_default_options)
 
-function (fix_static_pdb_name TARGET_NAME PDB_NAME)
+function (fix_compile_pdb_name TARGET_NAME PDB_NAME)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND NOT BUILD_SHARED_LIBS)
         set_target_properties(
             ${TARGET_NAME}
