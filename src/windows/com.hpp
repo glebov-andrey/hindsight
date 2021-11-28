@@ -27,8 +27,8 @@
 
 #include <Windows.h>
 // Windows.h must be included before other headers
-#include <OleAuto.h>
 #include <Unknwn.h>
+#include <oleauto.h>
 #include <wtypes.h>
 
 namespace hindsight::windows {
@@ -76,7 +76,7 @@ public:
         return *this;
     }
 
-    constexpr auto swap(com_ptr &other) noexcept { std::ranges::swap(m_ptr, other.m_ptr); }
+    constexpr auto swap(com_ptr &other) noexcept { std::swap(m_ptr, other.m_ptr); }
 
     friend constexpr auto swap(com_ptr &lhs, com_ptr &rhs) noexcept { lhs.swap(rhs); }
 
@@ -144,7 +144,7 @@ public:
     // NOLINTNEXTLINE(google-runtime-operator)
     [[nodiscard]] constexpr auto operator&() noexcept -> BSTR * { return &m_ptr; }
 
-    friend constexpr auto swap(bstr &lhs, bstr &rhs) noexcept -> void { std::ranges::swap(lhs.m_ptr, rhs.m_ptr); }
+    friend constexpr auto swap(bstr &lhs, bstr &rhs) noexcept -> void { std::swap(lhs.m_ptr, rhs.m_ptr); }
 
 private:
     BSTR m_ptr = nullptr;

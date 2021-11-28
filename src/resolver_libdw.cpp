@@ -386,6 +386,7 @@ public:
 
     [[nodiscard]] static auto create(from_proc_maps_t /* from_proc_maps_tag */, const int proc_maps_descriptor)
             -> std::shared_ptr<impl> {
+        assert(proc_maps_descriptor >= 0);
         auto proc_maps = c_file_from_fd(proc_maps_descriptor);
         if (proc_maps) {
             auto session = create_initial_session(proc_maps.get());

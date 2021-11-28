@@ -19,7 +19,9 @@
 #ifndef HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 #define HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 
+#include <cassert>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -28,6 +30,18 @@
 #include <hindsight/stacktrace_entry.hpp>
 
 namespace hindsight::windows {
+
+struct close_handle {
+    using pointer = HANDLE;
+
+    auto operator()(const HANDLE handle) const noexcept -> void {
+        [[maybe_unused]] const auto success = CloseHandle(handle);
+        assert(success);
+    }
+};
+
+using unique_process_handle = std::unique_ptr<HANDLE, close_handle>;
+
 
 struct module_info {
     std::uintptr_t base_offset;
@@ -41,12 +55,12 @@ public:
 
 class remote_module_map {
 public:
-    [[nodiscard]] explicit remote_module_map(const HANDLE process) noexcept : m_process{process} {}
+    [[nodiscard]] explicit remote_module_map(unique_process_handle process) noexcept : m_process{std::move(process)} {}
 
     [[nodiscard]] auto lookup(stacktrace_entry entry) const -> std::optional<module_info>;
 
 private:
-    HANDLE m_process;
+    unique_process_handle m_process;
 };
 
 } // namespace hindsight::windows

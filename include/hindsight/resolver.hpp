@@ -202,10 +202,12 @@ public:
     explicit resolver();
 
 #ifdef HINDSIGHT_OS_WINDOWS
+    // Takes ownership of the process handle, closes the handle on failure
     explicit resolver(from_process_handle_t from_process_handle_tag, HANDLE process);
 #endif
 
 #ifdef HINDSIGHT_OS_LINUX
+    // Takes ownership of the file descriptor, closes the descriptor on failure
     explicit resolver(from_proc_maps_t from_proc_maps_tag, int proc_maps_descriptor);
 #endif
 

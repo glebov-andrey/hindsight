@@ -180,14 +180,14 @@ auto wait_before_retry(const retry_count_t retry_idx) {
 
 auto remote_module_map::lookup(const stacktrace_entry entry) const -> std::optional<module_info> {
     for (auto retry_idx = retry_count_t{}; retry_idx != lookup_retry_count; ++retry_idx) {
-        auto modules = get_remote_module_handles(m_process);
+        auto modules = get_remote_module_handles(m_process.get());
         if (!modules) {
             wait_before_retry(retry_idx);
             continue;
         }
         const auto module_entry = [&]() -> std::optional<std::pair<HMODULE, basic_module_info>> {
             for (const auto module : *modules) { // NOLINT(readability-qualified-auto): HMODULE is a handle
-                const auto info = get_basic_module_info(m_process, module);
+                const auto info = get_basic_module_info(m_process.get(), module);
                 if (!info) {
                     return std::nullopt; // an error occurred
                 }
@@ -205,7 +205,7 @@ auto remote_module_map::lookup(const stacktrace_entry entry) const -> std::optio
         if (!module) {
             break;
         }
-        auto file_name = get_module_file_name(m_process, module);
+        auto file_name = get_module_file_name(m_process.get(), module);
         if (!file_name) {
             wait_before_retry(retry_idx);
             continue;

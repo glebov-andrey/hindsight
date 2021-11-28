@@ -21,13 +21,15 @@
 #ifdef HINDSIGHT_OS_WINDOWS
     #include <hindsight/resolver.hpp>
 
+    #include <cassert>
     #include <new>
     #include <unordered_map>
     #include <utility>
     #include <variant>
 
+    #include <Windows.h>
+    // Windows.h must be included before diacreate.h
     #include <dia2.h>
-    // dia2.h must be included before diacreate.h
     #include <diacreate.h>
 
     #include "util/locked.hpp"
@@ -170,8 +172,8 @@ class resolver::impl {
 public:
     explicit impl() = default;
 
-    explicit impl(from_process_handle_t /* from_process_handle_tag */, const HANDLE process) noexcept
-            : m_module_map{std::in_place_type<windows::remote_module_map>, process} {}
+    explicit impl(from_process_handle_t /* from_process_handle_tag */, windows::unique_process_handle process) noexcept
+            : m_module_map{std::in_place_type<windows::remote_module_map>, std::move(process)} {}
 
     auto resolve(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
         const auto on_failure = [&] { callback({entry, false, {}}); };
@@ -271,7 +273,10 @@ private:
 resolver::resolver() : m_impl{std::make_shared<impl>()} {}
 
 resolver::resolver(const from_process_handle_t from_process_handle_tag, const HANDLE process)
-        : m_impl{std::make_shared<impl>(from_process_handle_tag, process)} {}
+        : m_impl{std::make_shared<impl>(
+                  from_process_handle_tag,
+                  windows::unique_process_handle{
+                          (assert(process != nullptr && process != INVALID_HANDLE_VALUE), process)})} {}
 
 auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
     if (m_impl) {
