@@ -16,7 +16,7 @@
 
 if (HINDSIGHT_ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_PROGRAM clang-tidy REQUIRED DOC "The clang-tidy program")
-    message("-- hindsight: Using clang-tidy: ${CLANG_TIDY_PROGRAM}")
+    message(STATUS "hindsight: Using clang-tidy: ${CLANG_TIDY_PROGRAM}")
     # CMake by default for clang-cl sets CMAKE_INCLUDE_SYSTEM_FLAG_CXX to "-imsvc " (note the trailing space).
     # clang-tidy (as of 12.0.0) does not parse this correctly (as a single flag) which results in missing include
     # directories. As a workaround we remove the trailing space which, oddly enough, works correctly.

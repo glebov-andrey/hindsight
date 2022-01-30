@@ -18,7 +18,7 @@
 
 #include <hindsight/config.hpp>
 
-#ifdef HINDSIGHT_OS_LINUX
+#if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_LIBDW
 
     #include <hindsight/resolver.hpp>
 
@@ -265,133 +265,115 @@ using die_stack = std::stack<die_stack_entry, std::vector<die_stack_entry>>;
                                  .column_number = clamp_to_uint_least32(column_number)};
 }
 
-} // namespace
-
-
-struct logical_stacktrace_entry::impl_tag {};
-
-logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry::impl_tag && /* impl */,
-                                                   const stacktrace_entry physical,
-                                                   const bool is_inline,
-                                                   const bool maybe_mangled,
-                                                   const char *const symbol,
-                                                   const char *const file_name,
-                                                   const std::uint_least32_t line_number,
-                                                   const std::uint_least32_t column_number,
-                                                   std::shared_ptr<const void> resolver_impl) noexcept
-        : m_physical{physical},
-          m_is_inline{is_inline},
-          m_maybe_mangled{maybe_mangled},
-          m_symbol{symbol},
-          m_file_name{file_name},
-          m_line_number{line_number},
-          m_column_number{column_number},
-          m_resolver_impl{std::move(resolver_impl)} {}
-
-logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other) = default;
-
-logical_stacktrace_entry::~logical_stacktrace_entry() = default;
-
-namespace {
+constexpr auto utf8_to_current_transcoder_getter = [] { return unix::get_utf8_to_current_transcoder(); };
+constexpr auto utf8_sanitizer_getter = [] { return unix::get_utf8_sanitizer(); };
 
 template<typename CharT>
-auto demangle_and_encode_symbol(const char *const symbol, const bool maybe_mangled, const auto get_transcoder)
+auto demangle_and_encode_symbol(const std::string &raw_symbol, const bool maybe_mangled, const auto get_transcoder)
         -> std::basic_string<CharT> {
-    const auto demangled = symbol && maybe_mangled ? itanium_abi::demangle(symbol) : nullptr;
-    const auto unsanitized = demangled ? std::string_view{demangled.get()}
-                             : symbol  ? std::string_view{symbol}
-                                       : std::string_view{};
-    if (unsanitized.empty()) {
+    if (raw_symbol.empty()) {
         return {};
     }
-    return unix::transcode(get_transcoder(), unsanitized, std::in_place_type<CharT>);
+    const auto demangled = maybe_mangled ? itanium_abi::demangle(raw_symbol.c_str()) : nullptr;
+    const auto unencoded = demangled ? std::string_view{demangled.get()} : std::string_view{raw_symbol};
+    if (unencoded.empty()) {
+        return {};
+    }
+    return unix::transcode(get_transcoder(), unencoded, std::in_place_type<CharT>);
+}
+
+template<typename CharT>
+auto encode_file_name(const std::string &raw_file_name, const auto get_transcoder) -> std::basic_string<CharT> {
+    if (raw_file_name.empty()) {
+        return {};
+    }
+    return unix::transcode(get_transcoder(), raw_file_name, std::in_place_type<CharT>);
 }
 
 } // namespace
 
+
+logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
+                                                   std::string raw_symbol,
+                                                   std::string raw_file_name,
+                                                   const std::uint_least32_t line_number,
+                                                   const std::uint_least32_t column_number,
+                                                   const bool maybe_mangled,
+                                                   const bool is_inline) noexcept
+        : m_physical{physical},
+          m_raw_symbol{std::move(raw_symbol)},
+          m_raw_file_name{std::move(raw_file_name)},
+          m_line_number{line_number},
+          m_column_number{column_number},
+          m_maybe_mangled{maybe_mangled},
+          m_is_inline{is_inline} {}
+
 auto logical_stacktrace_entry::symbol() const -> std::string {
-    return demangle_and_encode_symbol<char>(m_symbol, m_maybe_mangled, [] {
-        return unix::get_utf8_to_current_transcoder();
-    });
+    return demangle_and_encode_symbol<char>(m_raw_symbol, m_maybe_mangled, utf8_to_current_transcoder_getter);
 }
 
 auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {
-    return demangle_and_encode_symbol<char8_t>(m_symbol, m_maybe_mangled, [] { return unix::get_utf8_sanitizer(); });
+    return demangle_and_encode_symbol<char8_t>(m_raw_symbol, m_maybe_mangled, utf8_sanitizer_getter);
 }
-
-namespace {
-
-template<typename CharT>
-auto encode_file_name(const char *const file_name, const auto get_transcoder) -> std::basic_string<CharT> {
-    const auto unsanitized_file_name = file_name ? std::string_view{file_name} : std::string_view{};
-    if (unsanitized_file_name.empty()) {
-        return {};
-    }
-    return unix::transcode(get_transcoder(), unsanitized_file_name, std::in_place_type<CharT>);
-}
-
-} // namespace
 
 auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name = encode_file_name<char>(m_file_name, [] { return unix::get_utf8_to_current_transcoder(); }),
-            .line_number = m_line_number};
+    return {.file_name = encode_file_name<char>(m_raw_file_name, utf8_to_current_transcoder_getter),
+            .line_number = m_line_number,
+            .column_number = m_column_number};
 }
 
 auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    return {.file_name = encode_file_name<char8_t>(m_file_name, [] { return unix::get_utf8_sanitizer(); }),
-            .line_number = m_line_number};
+    return {.file_name = encode_file_name<char8_t>(m_raw_file_name, utf8_sanitizer_getter),
+            .line_number = m_line_number,
+            .column_number = m_column_number};
 }
 
 
-namespace {
-
-struct callback_state {
-    const stacktrace_entry entry;
-    const detail::resolve_cb callback;
-
-    bool entry_issued = false;
-    bool done = false;
-
-    auto submit(logical_stacktrace_entry &&logical) -> bool {
-        if (!done) {
-            done = callback(std::move(logical));
-            entry_issued = true;
-        }
-        return done;
-    }
-
-    auto on_failure() -> void {
-        if (!entry_issued) {
-            done = callback({{}, entry, false, false, nullptr, nullptr, 0, 0, nullptr});
-            entry_issued = true;
-        }
-    }
-};
-
-} // namespace
-
-class resolver::impl : public std::enable_shared_from_this<impl> {
+class resolver::impl {
 public:
+    struct callback_state {
+        const stacktrace_entry entry;
+        const resolve_cb callback;
+
+        bool entry_issued = false;
+        bool done = false;
+
+        auto submit(logical_stacktrace_entry &&logical) -> bool {
+            if (!done) {
+                done = callback(std::move(logical));
+                entry_issued = true;
+            }
+            return done;
+        }
+
+        auto on_failure() -> void {
+            if (!entry_issued) {
+                done = callback(logical_stacktrace_entry{entry});
+                entry_issued = true;
+            }
+        }
+    };
+
     explicit impl(unique_c_file proc_maps, unique_dwfl_session dwfl_session)
             : m_proc_maps{std::move(proc_maps)},
               m_dwfl_session{(assert(dwfl_session), std::move(dwfl_session))} {}
 
-    [[nodiscard]] static auto create() -> std::shared_ptr<impl> {
+    [[nodiscard]] static auto create() -> std::unique_ptr<impl> {
         auto session = create_initial_session(nullptr);
         if (session) {
-            return std::make_shared<impl>(nullptr, std::move(session));
+            return std::make_unique<impl>(nullptr, std::move(session));
         }
         return nullptr;
     }
 
     [[nodiscard]] static auto create(from_proc_maps_t /* from_proc_maps_tag */, const int proc_maps_descriptor)
-            -> std::shared_ptr<impl> {
+            -> std::unique_ptr<impl> {
         assert(proc_maps_descriptor >= 0);
         auto proc_maps = c_file_from_fd(proc_maps_descriptor);
         if (proc_maps) {
             auto session = create_initial_session(proc_maps.get());
             if (session) {
-                return std::make_shared<impl>(std::move(proc_maps), std::move(session));
+                return std::make_unique<impl>(std::move(proc_maps), std::move(session));
             }
         }
         return nullptr;
@@ -450,17 +432,17 @@ private:
 
     // Returns whether a module was found for `entry`.
     [[nodiscard]] auto try_resolve_in_existing_modules(callback_state &cb_state) const -> bool {
-        auto *const module = m_dwfl_session.with_shared_lock([&](const unique_dwfl_session &session) {
-            return dwfl_addrmodule(session.get(), cb_state.entry.native_handle());
+        return m_dwfl_session.with_shared_lock([&](const unique_dwfl_session &session) {
+            auto *const module = dwfl_addrmodule(session.get(), cb_state.entry.native_handle());
+            if (!module) {
+                return false;
+            }
+            resolve_in_module(*module, cb_state);
+            return true;
         });
-        if (!module) {
-            return false;
-        }
-        resolve_in_module(*module, cb_state);
-        return true;
     }
 
-    auto resolve_in_module(Dwfl_Module &module, callback_state &cb_state) const -> void {
+    static auto resolve_in_module(Dwfl_Module &module, callback_state &cb_state) -> void {
         const auto cudie_and_addr_in_cu = find_compilation_unit(module, cb_state.entry);
         if (!cudie_and_addr_in_cu) {
             resolve_in_symbol_table(module, cb_state);
@@ -508,10 +490,10 @@ private:
         return stack;
     }
 
-    auto resolve_from_dfs_die_stack(dfs_die_stack &&stack,
-                                    Dwarf_Die &compilation_unit,
-                                    const Dwarf_Addr address_in_cu,
-                                    callback_state &cb_state) const -> void {
+    static auto resolve_from_dfs_die_stack(dfs_die_stack &&stack,
+                                           Dwarf_Die &compilation_unit,
+                                           const Dwarf_Addr address_in_cu,
+                                           callback_state &cb_state) -> void {
         assert(!stack.empty());
         assert(is_function(stack.top().first));
         assert(die_has_address(stack.top().first, address_in_cu));
@@ -522,15 +504,14 @@ private:
             if (is_function(die) && die_has_address(die, address_in_cu)) {
                 const auto is_inline = is_inline_function(die);
                 const auto [function_name, maybe_mangled] = func_name_search::search(die);
-                if (cb_state.submit({{},
-                                     cb_state.entry,
-                                     is_inline,
-                                     function_name ? maybe_mangled : false,
-                                     function_name,
-                                     source_location ? source_location->file_name : nullptr,
-                                     source_location ? source_location->line_number : 0,
-                                     source_location ? source_location->column_number : 0,
-                                     shared_from_this()})) {
+                if (cb_state.submit(
+                            logical_stacktrace_entry{cb_state.entry,
+                                                     function_name,
+                                                     source_location ? source_location->file_name : std::string{},
+                                                     source_location ? source_location->line_number : 0,
+                                                     source_location ? source_location->column_number : 0,
+                                                     maybe_mangled,
+                                                     is_inline})) {
                     return;
                 }
                 if (!is_inline) {
@@ -542,7 +523,7 @@ private:
         }
     }
 
-    auto resolve_in_symbol_table(Dwfl_Module &module, callback_state &cb_state) const -> void {
+    static auto resolve_in_symbol_table(Dwfl_Module &module, callback_state &cb_state) -> void {
         auto offset_in_symbol = GElf_Off{};
         auto symbol = GElf_Sym{};
         const auto *const symbol_name = dwfl_module_addrinfo(&module,
@@ -553,7 +534,7 @@ private:
                                                              nullptr,
                                                              nullptr);
         if (symbol_name) {
-            cb_state.submit({{}, cb_state.entry, false, true, symbol_name, nullptr, 0, 0, shared_from_this()});
+            cb_state.submit(logical_stacktrace_entry{cb_state.entry, symbol_name, {}, 0, 0, true, false});
         } else {
             cb_state.on_failure();
         }
@@ -565,8 +546,10 @@ resolver::resolver() : m_impl{impl::create()} {}
 resolver::resolver(const from_proc_maps_t from_proc_maps_tag, const int proc_maps_descriptor)
         : m_impl{impl::create(from_proc_maps_tag, proc_maps_descriptor)} {}
 
-auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
-    auto cb_state = callback_state{.entry = entry, .callback = callback};
+resolver::~resolver() = default;
+
+auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
+    auto cb_state = impl::callback_state{.entry = entry, .callback = callback};
     if (m_impl) {
         m_impl->resolve(cb_state);
     } else {

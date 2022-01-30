@@ -89,6 +89,6 @@ if (DIA_FOUND AND NOT TARGET DIA::DIA)
                    INTERFACE_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR}
                    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR})
     if (NOT DIA_FIND_QUIETLY)
-        message("-- Found DIA SDK: ${DIA_INCLUDE_DIR}")
+        message(STATUS "Found DIA SDK: ${DIA_INCLUDE_DIR}")
     endif ()
 endif ()

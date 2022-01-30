@@ -18,15 +18,17 @@
 
 #include "demangle.hpp"
 
-#include <new>
+#ifndef HINDSIGHT_OS_WINDOWS
 
-#include <cxxabi.h>
+    #include <new>
+
+    #include <cxxabi.h>
 
 namespace hindsight::itanium_abi {
 
-auto demangle(const char *const mangled) -> unique_freeable<char> {
+auto demangle(const char *const mangled) -> unique_freeable<char[]> {
     auto status = 0;
-    auto demangled = unique_freeable<char>{__cxxabiv1::__cxa_demangle(mangled, nullptr, nullptr, &status)};
+    auto demangled = unique_freeable<char[]>{__cxxabiv1::__cxa_demangle(mangled, nullptr, nullptr, &status)};
     switch (status) {
         case 0: // The demangling operation succeeded.
             return demangled;
@@ -41,3 +43,5 @@ auto demangle(const char *const mangled) -> unique_freeable<char> {
 }
 
 } // namespace hindsight::itanium_abi
+
+#endif

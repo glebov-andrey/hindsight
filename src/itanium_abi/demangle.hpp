@@ -19,8 +19,13 @@
 #ifndef HINDSIGHT_SRC_ITANIUM_ABI_DEMANGLE_HPP
 #define HINDSIGHT_SRC_ITANIUM_ABI_DEMANGLE_HPP
 
-#include <cstdlib>
-#include <memory>
+#include <hindsight/config.hpp>
+
+#ifndef HINDSIGHT_OS_WINDOWS
+
+    #include <cstdlib>
+    #include <memory>
+    #include <type_traits>
 
 namespace hindsight::itanium_abi {
 
@@ -31,11 +36,14 @@ struct std_free_deleter {
 };
 
 template<typename T>
+    requires std::is_trivially_destructible_v<std::remove_all_extents_t<T>>
 using unique_freeable = std::unique_ptr<T, std_free_deleter>;
 
 
-[[nodiscard]] auto demangle(const char *mangled) -> unique_freeable<char>;
+[[nodiscard]] auto demangle(const char *mangled) -> unique_freeable<char[]>;
 
 } // namespace hindsight::itanium_abi
+
+#endif
 
 #endif // HINDSIGHT_SRC_ITANIUM_ABI_DEMANGLE_HPP

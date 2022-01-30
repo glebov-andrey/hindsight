@@ -19,13 +19,17 @@
 #ifndef HINDSIGHT_SRC_UNIX_ENCODING_HPP
 #define HINDSIGHT_SRC_UNIX_ENCODING_HPP
 
-#include <cassert>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <utility>
+#include <hindsight/config.hpp>
 
-#include <iconv.h>
+#ifdef HINDSIGHT_OS_UNIX
+
+    #include <cassert>
+    #include <memory>
+    #include <string>
+    #include <string_view>
+    #include <utility>
+
+    #include <iconv.h>
 
 namespace hindsight::unix {
 
@@ -76,5 +80,7 @@ using unique_iconv = std::unique_ptr<iconv_t, destroy_iconv>;
         -> std::u8string;
 
 } // namespace hindsight::unix
+
+#endif
 
 #endif // HINDSIGHT_SRC_UNIX_ENCODING_HPP

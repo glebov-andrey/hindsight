@@ -16,13 +16,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string_view>
-#include <thread>
-#include <utility>
+#include <hindsight/config.hpp>
 
-#include <catch2/catch.hpp>
+#ifdef HINDSIGHT_OS_UNIX
 
-#include "encoding.hpp"
+    #include <string_view>
+    #include <thread>
+    #include <utility>
+
+    #include <catch2/catch.hpp>
+
+    #include "encoding.hpp"
 
 namespace hindsight::unix {
 
@@ -145,3 +149,5 @@ TEST_CASE("unix: transcoding ISO-8859-1 to UTF-8: a string that gets longer afte
 }
 
 } // namespace hindsight::unix
+
+#endif

@@ -18,7 +18,7 @@
 
 #include <hindsight/config.hpp>
 
-#if !defined HINDSIGHT_OS_WINDOWS && !defined HINDSIGHT_OS_LINUX
+#if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
 
     #include <hindsight/resolver.hpp>
 
@@ -56,76 +56,69 @@ namespace {
     return global_state;
 }
 
-} // namespace
 
-struct logical_stacktrace_entry::impl_tag {};
-
-logical_stacktrace_entry::logical_stacktrace_entry(impl_tag && /* impl */,
-                                                   const stacktrace_entry physical,
-                                                   const bool is_inline,
-                                                   std::string &&symbol,
-                                                   source_location &&source) noexcept
-        : m_physical{physical},
-          m_is_inline{is_inline},
-          m_symbol{std::move(symbol)},
-          m_source{std::move(source)} {}
-
-logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other) = default;
-
-logical_stacktrace_entry::~logical_stacktrace_entry() = default;
-
-namespace {
+constexpr auto utf8_to_current_transcoder_getter = [] { return unix::get_utf8_to_current_transcoder(); };
+constexpr auto utf8_sanitizer_getter = [] { return unix::get_utf8_sanitizer(); };
 
 template<typename CharT>
-auto demangle_and_encode_symbol(const std::string &symbol, const auto get_transcoder) -> std::basic_string<CharT> {
-    const auto demangled = symbol.empty() ? nullptr : itanium_abi::demangle(symbol.c_str());
-    const auto unsanitized = demangled ? std::string_view{demangled.get()} : std::string_view{symbol};
-    if (unsanitized.empty()) {
+auto demangle_and_encode_symbol(const std::string &raw_symbol, const auto get_transcoder) -> std::basic_string<CharT> {
+    if (raw_symbol.empty()) {
         return {};
     }
-    return unix::transcode(get_transcoder(), unsanitized, std::in_place_type<CharT>);
+    const auto demangled = itanium_abi::demangle(raw_symbol.c_str());
+    const auto unencoded = demangled ? std::string_view{demangled.get()} : std::string_view{raw_symbol};
+    if (unencoded.empty()) {
+        return {};
+    }
+    return unix::transcode(get_transcoder(), unencoded, std::in_place_type<CharT>);
+}
+
+template<typename CharT>
+auto encode_file_name(const std::string &raw_file_name, const auto get_transcoder) -> std::basic_string<CharT> {
+    if (raw_file_name.empty()) {
+        return {};
+    }
+    return unix::transcode(get_transcoder(), raw_file_name, std::in_place_type<CharT>);
 }
 
 } // namespace
 
+logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
+                                                   std::string raw_symbol,
+                                                   std::string raw_file_name,
+                                                   const std::uint_least32_t line_number,
+                                                   const bool is_inline) noexcept
+        : m_physical{physical},
+          m_raw_symbol{std::move(raw_symbol)},
+          m_raw_file_name{std::move(raw_file_name)},
+          m_line_number{line_number},
+          m_is_inline{is_inline} {}
+
 auto logical_stacktrace_entry::symbol() const -> std::string {
-    return demangle_and_encode_symbol<char>(m_symbol, [] { return unix::get_utf8_to_current_transcoder(); });
+    return demangle_and_encode_symbol<char>(m_raw_symbol, utf8_to_current_transcoder_getter);
 }
 
 auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {
-    return demangle_and_encode_symbol<char8_t>(m_symbol, [] { return unix::get_utf8_sanitizer(); });
+    return demangle_and_encode_symbol<char8_t>(m_raw_symbol, utf8_sanitizer_getter);
 }
-
-namespace {
-
-template<typename CharT>
-auto encode_file_name(const std::string &unsanitized, const auto get_transcoder) -> std::basic_string<CharT> {
-    if (unsanitized.empty()) {
-        return {};
-    }
-    return unix::transcode(get_transcoder(), unsanitized, std::in_place_type<CharT>);
-}
-
-} // namespace
 
 auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name =
-                    encode_file_name<char>(m_source.file_name, [] { return unix::get_utf8_to_current_transcoder(); }),
-            .line_number = m_source.line_number};
+    return {.file_name = encode_file_name<char>(m_raw_file_name, utf8_to_current_transcoder_getter),
+            .line_number = m_line_number,
+            .column_number = 0};
 }
 
 auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    return {.file_name = encode_file_name<char8_t>(m_source.file_name, [] { return unix::get_utf8_sanitizer(); }),
-            .line_number = m_source.line_number};
+    return {.file_name = encode_file_name<char8_t>(m_raw_file_name, utf8_sanitizer_getter),
+            .line_number = m_line_number,
+            .column_number = 0};
 }
-
-auto logical_stacktrace_entry::set_inline(impl_tag && /* impl */) noexcept -> void { m_is_inline = true; }
 
 
 resolver::resolver() = default;
 
-auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
-    const auto on_failure = [&] { callback({{}, entry, false, {}, {}}); };
+auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
+    const auto on_failure = [&] { callback(logical_stacktrace_entry{entry}); };
 
     auto *const global_state = get_backtrace_state();
     if (!global_state) {
@@ -135,9 +128,9 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_
 
     struct cb_state {
         const stacktrace_entry entry;
-        const detail::resolve_cb callback;
-        std::optional<logical_stacktrace_entry> buffered_entry;
-        std::exception_ptr exception;
+        const resolve_cb callback;
+        std::optional<logical_stacktrace_entry> buffered_entry = std::nullopt;
+        std::exception_ptr exception = nullptr;
 
         bool entry_issued = false;
         bool done = false;
@@ -145,7 +138,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_
         auto flush_buffered_entry(const bool is_inline) {
             if (buffered_entry && !done) {
                 if (is_inline) {
-                    buffered_entry->set_inline({});
+                    buffered_entry->m_is_inline = true;
                 }
                 done = callback(std::move(*buffered_entry));
                 entry_issued = true;
@@ -153,7 +146,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_
             }
             return done;
         }
-    } state{.entry = entry, .callback = callback, .buffered_entry = std::nullopt, .exception = nullptr};
+    } state{.entry = entry, .callback = callback};
 
     backtrace_pcinfo(
             global_state,
@@ -169,12 +162,11 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_
                         return 0;
                     }
                     state.buffered_entry = logical_stacktrace_entry{
-                            {},
                             state.entry,
-                            false,
                             std::string{function ? std::string_view{function} : std::string_view{}},
-                            {.file_name = std::string{filename ? std::string_view{filename} : std::string_view{}},
-                             .line_number = static_cast<std::uint_least32_t>(lineno)}};
+                            std::string{filename ? std::string_view{filename} : std::string_view{}},
+                            static_cast<std::uint_least32_t>(lineno),
+                            false};
                     return 0;
                 } catch (...) {
                     state.exception = std::current_exception();

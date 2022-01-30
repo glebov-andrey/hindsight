@@ -18,11 +18,10 @@
 
 #include <hindsight/config.hpp>
 
-#ifdef HINDSIGHT_OS_WINDOWS
+#if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA
     #include <hindsight/resolver.hpp>
 
     #include <cassert>
-    #include <new>
     #include <unordered_map>
     #include <utility>
     #include <variant>
@@ -40,87 +39,28 @@
 
 namespace hindsight {
 
-struct logical_stacktrace_entry::impl_payload {
-    windows::com_ptr<IDiaSession> session{};
-    windows::com_ptr<IDiaSymbol> symbol{};
-};
-
-
-// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
-logical_stacktrace_entry::logical_stacktrace_entry() noexcept {
-    static_assert(sizeof(impl_payload) == impl_payload_size);
-    new (static_cast<void *>(m_impl_storage.data())) impl_payload{};
-}
-
-// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
-logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
-                                                   const bool is_inline,
-                                                   impl_payload &&impl) noexcept
-        : m_physical{physical},
-          m_is_inline{is_inline} {
-    new (static_cast<void *>(m_impl_storage.data())) impl_payload{std::move(impl)};
-}
-
-// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
-logical_stacktrace_entry::logical_stacktrace_entry(const logical_stacktrace_entry &other)
-        : m_physical{other.m_physical},
-          m_is_inline{other.m_is_inline} {
-    new (static_cast<void *>(m_impl_storage.data())) impl_payload(other.impl());
-}
-
-// NOLINTNEXTLINE(hicpp-member-init): m_impl_storage is used as storage for placement-new, no need to initialize it
-logical_stacktrace_entry::logical_stacktrace_entry(logical_stacktrace_entry &&other) noexcept
-        : m_physical{std::exchange(other.m_physical, stacktrace_entry{})},
-          m_is_inline{std::exchange(other.m_is_inline, false)} {
-    new (static_cast<void *>(m_impl_storage.data())) impl_payload(std::move(other.impl()));
-}
-
-logical_stacktrace_entry::~logical_stacktrace_entry() { impl().~impl_payload(); }
-
-auto logical_stacktrace_entry::swap(logical_stacktrace_entry &other) noexcept -> void {
-    std::ranges::swap(m_physical, other.m_physical);
-    std::ranges::swap(m_is_inline, other.m_is_inline);
-    std::ranges::swap(impl(), other.impl());
-}
-
 namespace {
 
-[[nodiscard]] auto symbol_impl(const logical_stacktrace_entry::impl_payload &impl) -> windows::bstr {
-    if (!impl.symbol) {
-        return {};
-    }
-    auto symbol_name = windows::bstr{};
-    if (const auto result = impl.symbol->get_name(&symbol_name); FAILED(result)) {
+[[nodiscard]] auto get_symbol_name(IDiaSymbol &symbol) -> detail::bstr {
+    auto symbol_name = detail::bstr{};
+    if (const auto result = symbol.get_name(symbol_name.out_ptr()); FAILED(result)) {
         return {};
     }
     return symbol_name;
 }
 
-} // namespace
-
-auto logical_stacktrace_entry::symbol() const -> std::string { return windows::wide_to_narrow(symbol_impl(impl())); }
-
-auto logical_stacktrace_entry::u8_symbol() const -> std::u8string { return windows::wide_to_utf8(symbol_impl(impl())); }
-
-namespace {
-
-[[nodiscard]] auto source_impl(const stacktrace_entry physical,
-                               const bool is_inline,
-                               const logical_stacktrace_entry::impl_payload &impl)
-        -> std::pair<windows::bstr, std::uint_least32_t> {
-    if (!impl.symbol) {
-        return {};
-    }
+[[nodiscard]] auto get_source_location(IDiaSession &session,
+                                       IDiaSymbol &symbol,
+                                       const stacktrace_entry physical,
+                                       const bool is_inline) -> std::pair<detail::bstr, std::uint_least32_t> {
     auto lines = windows::com_ptr<IDiaEnumLineNumbers>{};
     if (is_inline) {
-        if (const auto result =
-                    impl.session->findInlineeLinesByVA(impl.symbol.get(), physical.native_handle(), 1, &lines);
+        if (const auto result = session.findInlineeLinesByVA(&symbol, physical.native_handle(), 1, &lines);
             FAILED(result) || !lines) {
             return {};
         }
     } else {
-        if (const auto result = impl.session->findLinesByVA(physical.native_handle(), 1, &lines);
-            FAILED(result) || !lines) {
+        if (const auto result = session.findLinesByVA(physical.native_handle(), 1, &lines); FAILED(result) || !lines) {
             return {};
         }
     }
@@ -136,8 +76,8 @@ namespace {
     if (const auto result = line->get_sourceFile(&source_file); FAILED(result) || !source_file) {
         return {};
     }
-    auto file_name = windows::bstr{};
-    if (const auto result = source_file->get_fileName(&file_name); FAILED(result)) {
+    auto file_name = detail::bstr{};
+    if (const auto result = source_file->get_fileName(file_name.out_ptr()); FAILED(result)) {
         return {};
     }
     auto line_number = DWORD{};
@@ -147,24 +87,27 @@ namespace {
 
 } // namespace
 
+logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
+                                                   detail::bstr symbol,
+                                                   detail::bstr file_name,
+                                                   const std::uint_least32_t line_number,
+                                                   const bool is_inline) noexcept
+        : m_physical{physical},
+          m_symbol{std::move(symbol)},
+          m_file_name{std::move(file_name)},
+          m_line_number{line_number},
+          m_is_inline{is_inline} {}
+
+auto logical_stacktrace_entry::symbol() const -> std::string { return windows::wide_to_narrow(m_symbol); }
+
+auto logical_stacktrace_entry::u8_symbol() const -> std::u8string { return windows::wide_to_utf8(m_symbol); }
+
 auto logical_stacktrace_entry::source() const -> source_location {
-    const auto [file_name, line_number] = source_impl(physical(), is_inline(), impl());
-    return {.file_name = windows::wide_to_narrow(file_name), .line_number = line_number};
+    return {.file_name = windows::wide_to_narrow(m_file_name), .line_number = m_line_number, .column_number = 0};
 }
 
 auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    const auto [file_name, line_number] = source_impl(physical(), is_inline(), impl());
-    return {.file_name = windows::wide_to_utf8(file_name), .line_number = line_number};
-}
-
-auto logical_stacktrace_entry::impl() const noexcept -> const impl_payload & {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): impl_payload was created by placement new in a ctor
-    return *std::launder(reinterpret_cast<const impl_payload *>(m_impl_storage.data()));
-}
-
-auto logical_stacktrace_entry::impl() noexcept -> impl_payload & {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): impl_payload was created by placement new in a ctor
-    return *std::launder(reinterpret_cast<impl_payload *>(m_impl_storage.data()));
+    return {.file_name = windows::wide_to_utf8(m_file_name), .line_number = m_line_number, .column_number = 0};
 }
 
 
@@ -175,14 +118,24 @@ public:
     explicit impl(from_process_handle_t /* from_process_handle_tag */, windows::unique_process_handle process) noexcept
             : m_module_map{std::in_place_type<windows::remote_module_map>, std::move(process)} {}
 
-    auto resolve(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
-        const auto on_failure = [&] { callback({entry, false, {}}); };
+    auto resolve(const stacktrace_entry entry, const resolve_cb callback) -> void {
+        const auto on_failure = [&] { callback(logical_stacktrace_entry{entry}); };
 
         auto session = session_for_entry(entry);
         if (!session) {
             on_failure();
             return;
         }
+
+        const auto on_logical_entry = [&](IDiaSymbol &symbol, const bool is_inline) {
+            auto symbol_name = get_symbol_name(symbol);
+            auto [file_name, line_number] = get_source_location(*session, symbol, entry, is_inline);
+            return callback(logical_stacktrace_entry{entry,
+                                                     std::move(symbol_name),
+                                                     std::move(file_name),
+                                                     line_number,
+                                                     is_inline});
+        };
 
         auto root_symbol = windows::com_ptr<IDiaSymbol>{};
         for (const auto symbol_type : {SymTagFunction, SymTagPublicSymbol}) {
@@ -211,7 +164,7 @@ public:
                 auto inline_symbol = windows::com_ptr<IDiaSymbol>{};
                 if (const auto result = inline_symbols->Item(inline_idx, &inline_symbol);
                     SUCCEEDED(result) && inline_symbol) {
-                    if (callback({entry, true, {session, std::move(inline_symbol)}})) {
+                    if (on_logical_entry(*inline_symbol, true)) {
                         return true;
                     }
                 }
@@ -222,7 +175,7 @@ public:
             return;
         }
 
-        callback({entry, false, {std::move(session), std::move(root_symbol)}});
+        on_logical_entry(*root_symbol, false);
     }
 
 private:
@@ -270,19 +223,22 @@ private:
 };
 
 
-resolver::resolver() : m_impl{std::make_shared<impl>()} {}
+resolver::resolver() : m_impl{std::make_unique<impl>()} {}
 
 resolver::resolver(const from_process_handle_t from_process_handle_tag, const HANDLE process)
-        : m_impl{std::make_shared<impl>(
+        : m_impl{std::make_unique<impl>(
                   from_process_handle_tag,
                   windows::unique_process_handle{
+                          // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast): inside macro expansion
                           (assert(process != nullptr && process != INVALID_HANDLE_VALUE), process)})} {}
 
-auto resolver::resolve_impl(const stacktrace_entry entry, const detail::resolve_cb callback) -> void {
+resolver::~resolver() = default;
+
+auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
     if (m_impl) {
         m_impl->resolve(entry, callback);
     } else {
-        callback({entry, false, {}});
+        callback(logical_stacktrace_entry{entry});
     }
 }
 

@@ -87,7 +87,7 @@ if (elfutils_elfutils_FOUND AND NOT TARGET elfutils::elfutils)
         PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ELFUTILS_INCLUDE_DIRECTORY}
                    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${ELFUTILS_INCLUDE_DIRECTORY})
     if (NOT elfutils_FIND_QUIETLY)
-        message("-- Found elfutils: ${ELFUTILS_INCLUDE_DIRECTORY}")
+        message(STATUS "Found elfutils: ${ELFUTILS_INCLUDE_DIRECTORY}")
     endif ()
 endif ()
 
@@ -100,6 +100,6 @@ if (elfutils_libdw_FOUND AND NOT TARGET elfutils::libdw)
                    INTERFACE_INCLUDE_DIRECTORIES ${ELFUTILS_LIBDW_INCLUDE_DIRECTORY}
                    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${ELFUTILS_LIBDW_INCLUDE_DIRECTORY})
     if (NOT elfutils_FIND_QUIETLY)
-        message("-- Found libdw: ${ELFUTILS_LIBDW_LIBRARY}")
+        message(STATUS "Found libdw: ${ELFUTILS_LIBDW_LIBRARY}")
     endif ()
 endif ()

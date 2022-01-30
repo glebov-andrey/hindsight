@@ -19,17 +19,16 @@
 #ifndef HINDSIGHT_SRC_WINDOWS_COM_HPP
 #define HINDSIGHT_SRC_WINDOWS_COM_HPP
 
-#include <cassert>
-#include <concepts>
-#include <cstddef>
-#include <string_view>
-#include <utility>
+#include <hindsight/config.hpp>
 
-#include <Windows.h>
-// Windows.h must be included before other headers
-#include <Unknwn.h>
-#include <oleauto.h>
-#include <wtypes.h>
+#ifdef HINDSIGHT_OS_WINDOWS
+
+    #include <cassert>
+    #include <concepts>
+    #include <cstddef>
+    #include <utility>
+
+    #include <Unknwn.h>
 
 namespace hindsight::windows {
 
@@ -109,47 +108,8 @@ private:
     T *m_ptr = nullptr;
 };
 
-
-class bstr {
-public:
-    constexpr bstr() noexcept = default;
-
-    bstr(const bstr &other) = delete;
-
-    constexpr bstr(bstr &&other) noexcept : m_ptr{std::exchange(other.m_ptr, nullptr)} {}
-
-    ~bstr() {
-        // clang-tidy (as of 12.0.0) incorrectly assumes that the default constructor does not write to m_ptr even
-        // though it has a default member initializer.
-        SysFreeString(m_ptr); // NOLINT(clang-analyzer-core.CallAndMessage)
-    }
-
-    auto operator=(const bstr &other) -> bstr & = delete;
-
-    auto operator=(bstr &&other) noexcept -> bstr & {
-        auto tmp = std::move(other);
-        swap(*this, tmp);
-        return *this;
-    }
-
-    [[nodiscard]] constexpr auto data() const noexcept -> const wchar_t * { return m_ptr; }
-
-    [[nodiscard]] auto size() const noexcept -> std::size_t { return SysStringLen(m_ptr); }
-
-    [[nodiscard]] auto empty() const noexcept -> bool { return size() == 0; }
-
-    // NOLINTNEXTLINE(hicpp-explicit-conversions)
-    [[nodiscard]] explicit(false) operator std::wstring_view() const noexcept { return {data(), size()}; }
-
-    // NOLINTNEXTLINE(google-runtime-operator)
-    [[nodiscard]] constexpr auto operator&() noexcept -> BSTR * { return &m_ptr; }
-
-    friend constexpr auto swap(bstr &lhs, bstr &rhs) noexcept -> void { std::swap(lhs.m_ptr, rhs.m_ptr); }
-
-private:
-    BSTR m_ptr = nullptr;
-};
-
 } // namespace hindsight::windows
+
+#endif
 
 #endif // HINDSIGHT_SRC_WINDOWS_COM_HPP

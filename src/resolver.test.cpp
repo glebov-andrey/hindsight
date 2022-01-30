@@ -30,13 +30,13 @@
 
 namespace hindsight {
 
-TEST_CASE("A resolver is default-constructible and nothrow-move-constructible/-assignable") {
+TEST_CASE("A resolver is default-constructible and immovable") {
     STATIC_REQUIRE(std::default_initializable<resolver>);
-    STATIC_REQUIRE(std::is_nothrow_move_constructible_v<resolver>);
-    STATIC_REQUIRE(std::is_nothrow_move_assignable_v<resolver>);
 
-    STATIC_REQUIRE(!std::copy_constructible<resolver>);
+    STATIC_REQUIRE(!std::is_copy_constructible_v<resolver>);
+    STATIC_REQUIRE(!std::is_move_constructible_v<resolver>);
     STATIC_REQUIRE(!std::is_copy_assignable_v<resolver>);
+    STATIC_REQUIRE(!std::is_move_assignable_v<resolver>);
 }
 
 namespace {
@@ -55,16 +55,6 @@ TEST_CASE("A default-constructed resolver can be used") {
 
     auto r = resolver{};
     resolve_and_check(r, trace.front());
-}
-
-TEST_CASE("Both moved-from and moved-to resolvers can be used") {
-    const auto trace = capture_stacktrace();
-
-    auto moved_from = resolver{};
-    auto moved_to = std::move(moved_from);
-
-    resolve_and_check(moved_from, trace.front());
-    resolve_and_check(moved_to, trace.front());
 }
 
 } // namespace hindsight

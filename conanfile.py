@@ -34,6 +34,7 @@ class HindsightConan(ConanFile):
         "shared": [False, True],
         "fPIC": [False, True],
         "with_fmt": [False, True],
+        "resolver_backend": ["libdw", "libbacktrace"],
         "build_tests": [False, True],
         "build_examples": [False, True],
         "build_docs": [False, True],
@@ -42,6 +43,7 @@ class HindsightConan(ConanFile):
         "shared": False,
         "fPIC": True,
         "with_fmt": False,
+        "resolver_backend": "libdw",
         "build_tests": False,
         "build_examples": False,
         "build_docs": False,
@@ -53,13 +55,18 @@ class HindsightConan(ConanFile):
 
     _fmt_package_name = "fmt/[^8.0.1]"
 
+    def config_options(self):
+        if self.settings.os != "Linux":
+            del self.options.resolver_backend
+
     def requirements(self):
         self.requires("tl-function-ref/[^1.0.0]")
         if self.options.with_fmt:
             self.requires(self._fmt_package_name)
         if self.settings.os != "Windows":
             self.requires("libunwind/[^1.5.0]")
-        if self.settings.os != "Windows" and self.settings.os != "Linux":
+        if (self.settings.os != "Windows" and self.settings.os != "Linux") or \
+                (self.settings.os == "Linux" and self.options.resolver_backend == "libbacktrace"):
             self.requires("libbacktrace/cci.20210118")
 
     def build_requirements(self):
@@ -80,6 +87,8 @@ class HindsightConan(ConanFile):
     def generate(self):
         toolchain = CMakeToolchain(self)
         toolchain.variables["HINDSIGHT_WITH_FMT"] = self.options.with_fmt
+        if self.settings.os == "Linux":
+            toolchain.variables["HINDSIGHT_RESOLVER_BACKEND"] = self.options.resolver_backend
         toolchain.variables["HINDSIGHT_BUILD_TESTS"] = self.options.build_tests
         toolchain.variables["HINDSIGHT_BUILD_EXAMPLES"] = self.options.build_examples
         toolchain.variables["HINDSIGHT_BUILD_DOCS"] = self.options.build_docs
@@ -113,6 +122,9 @@ class HindsightConan(ConanFile):
             self.cpp_info.defines.append("HINDSIGHT_WITH_FMT")
         if self.options.shared:
             self.cpp_info.defines.append("HINDSIGHT_SHARED")
+        if self.settings.os == "Linux" and self.options.resolver_backend != "libdw":
+            backend_macro = f"HINDSIGHT_RESOLVER_BACKEND_{str(self.options.resolver_backend).upper()}"
+            self.cpp_info.defines.append(f"HINDSIGHT_RESOLVER_BACKEND={backend_macro}")
 
     def package_id(self):
         del self.info.options.build_tests

@@ -36,7 +36,7 @@
     #define HINDSIGHT_API_HIDDEN
 #elif defined __GNUC__
     #define HINDSIGHT_API_EXPORT [[gnu::visibility("default")]]
-    #define HINDSIGHT_API_IMPORT
+    #define HINDSIGHT_API_IMPORT [[gnu::visibility("default")]]
     #define HINDSIGHT_API_HIDDEN [[gnu::visibility("hidden")]]
 #else
     #define HINDSIGHT_API_EXPORT
@@ -77,6 +77,38 @@
 // The MSVC STL <format> implementation is disabled before 202105L due to https://github.com/microsoft/STL/issues/1961.
 #if __cpp_lib_format >= 201907L && (!defined _MSVC_STL_UPDATE || _MSVC_STL_UPDATE >= 202105L)
     #define HINDSIGHT_HAS_STD_FORMAT
+#endif
+
+
+#define HINDSIGHT_RESOLVER_BACKEND_DIA 1
+#define HINDSIGHT_RESOLVER_BACKEND_LIBDW 2
+#define HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE 3
+
+#ifdef HINDSIGHT_OS_WINDOWS
+    #if defined HINDSIGHT_RESOLVER_BACKEND
+        #if HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_DIA
+            #error HINDSIGHT_RESOLVER_BACKEND must be DIA on Windows
+        #endif
+    #else
+        #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_DIA
+    #endif
+#elif defined HINDSIGHT_OS_LINUX
+    #if defined HINDSIGHT_RESOLVER_BACKEND
+        #if HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_LIBDW &&                                          \
+                HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
+            #error HINDSIGHT_RESOLVER_BACKEND must be LIBDW or LIBBACKTRACE on Linux
+        #endif
+    #else
+        #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_LIBDW
+    #endif
+#else
+    #if defined HINDSIGHT_RESOLVER_BACKEND
+        #if HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
+            #error HINDSIGHT_RESOLVER_BACKEND must be LIBBACKTRACE on this OS
+        #endif
+    #else
+        #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
+    #endif
 #endif
 
 #endif // HINDSIGHT_INCLUDE_HINDSIGHT_CONFIG_HPP

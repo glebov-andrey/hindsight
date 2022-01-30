@@ -18,17 +18,19 @@
 
 #include "module_map.hpp"
 
-#include <algorithm>
-#include <cassert>
-#include <chrono>
-#include <cstddef>
-#include <limits>
-#include <memory>
-#include <system_error>
-#include <thread>
-#include <utility>
+#ifdef HINDSIGHT_OS_WINDOWS
 
-#include <Psapi.h>
+    #include <algorithm>
+    #include <cassert>
+    #include <chrono>
+    #include <cstddef>
+    #include <limits>
+    #include <memory>
+    #include <system_error>
+    #include <thread>
+    #include <utility>
+
+    #include <Psapi.h>
 
 namespace hindsight::windows {
 
@@ -216,3 +218,5 @@ auto remote_module_map::lookup(const stacktrace_entry entry) const -> std::optio
 }
 
 } // namespace hindsight::windows
+
+#endif

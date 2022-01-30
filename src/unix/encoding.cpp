@@ -18,18 +18,20 @@
 
 #include "encoding.hpp"
 
-#include <algorithm>
-#include <cerrno>
-#include <cstddef>
-#include <iterator>
-#include <new>
-#include <sstream>
-#include <system_error>
+#ifdef HINDSIGHT_OS_UNIX
 
-#include <langinfo.h>
-#include <locale.h> // NOLINT(hicpp-deprecated-headers): newlocale is defined in <locale.h> by POSIX (not C++)
+    #include <algorithm>
+    #include <cerrno>
+    #include <cstddef>
+    #include <iterator>
+    #include <new>
+    #include <sstream>
+    #include <system_error>
 
-#include "../util/finally.hpp"
+    #include <langinfo.h>
+    #include <locale.h> // NOLINT(hicpp-deprecated-headers): newlocale is defined in <locale.h> by POSIX (not C++)
+
+    #include "../util/finally.hpp"
 
 namespace hindsight::unix {
 
@@ -146,3 +148,5 @@ auto transcode(const iconv_t conversion, const std::string_view input, std::in_p
 }
 
 } // namespace hindsight::unix
+
+#endif

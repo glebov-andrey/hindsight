@@ -19,35 +19,27 @@ target_sources(
     PRIVATE # cmake-format: sort
             capture_unix.cpp
             capture_windows.cpp
+            detail/bstr.cpp
+            itanium_abi/demangle.cpp
+            itanium_abi/demangle.hpp
             resolver_backtrace.cpp
             resolver_libdw.cpp
             resolver_windows.cpp
             simple.cpp
             stacktrace.cpp
             stacktrace_entry.cpp
+            unix/encoding.cpp
+            unix/encoding.hpp
             util/finally.cpp
             util/finally.hpp
             util/locked.cpp
-            util/locked.hpp)
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_sources(
-        hindsight_obj
-        PRIVATE # cmake-format: sort
-                windows/com.cpp
-                windows/com.hpp
-                windows/encoding.cpp
-                windows/encoding.hpp
-                windows/module_map.cpp
-                windows/module_map.hpp)
-else ()
-    target_sources(
-        hindsight_obj
-        PRIVATE # cmake-format: sort
-                itanium_abi/demangle.cpp
-                itanium_abi/demangle.hpp
-                unix/encoding.cpp
-                unix/encoding.hpp)
-endif ()
+            util/locked.hpp
+            windows/com.cpp
+            windows/com.hpp
+            windows/encoding.cpp
+            windows/encoding.hpp
+            windows/module_map.cpp
+            windows/module_map.hpp)
 
 if (HINDSIGHT_BUILD_TESTS)
     target_sources(
@@ -57,8 +49,6 @@ if (HINDSIGHT_BUILD_TESTS)
                 capture_signal.test.cpp
                 resolver.test.cpp
                 stacktrace_entry.test.cpp
+                unix/encoding.test.cpp
                 util/locked.test.cpp)
-    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
-        target_sources(hindsight_tests PRIVATE unix/encoding.test.cpp)
-    endif ()
 endif ()
