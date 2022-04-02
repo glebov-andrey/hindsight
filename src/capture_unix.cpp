@@ -51,11 +51,12 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
     } while (unw_step(&cursor) > 0);
 }
 
-auto capture_stacktrace(const std::size_t entries_to_skip, const capture_stacktrace_cb callback) -> void {
+auto capture_stacktrace(std::size_t entries_to_skip, const capture_stacktrace_cb callback) -> void {
     unw_context_t context;
     if (unw_getcontext(&context) != 0) {
         return;
     }
+    increment_if_has_noinline(entries_to_skip);
     capture_stacktrace_from_mutable_context(context, entries_to_skip, callback);
 }
 

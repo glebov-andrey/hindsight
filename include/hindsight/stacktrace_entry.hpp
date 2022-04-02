@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_ENTRY_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_ENTRY_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #include <compare>
 #include <cstdint>

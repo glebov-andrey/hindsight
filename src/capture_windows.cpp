@@ -41,7 +41,7 @@ namespace {
 auto skip_leaf_function(CONTEXT &context) noexcept {
     #ifdef _M_AMD64
     // Making the load from `*Rsp` volatile because the memory it references doesn't really exist in the abstract
-    // machine, and so the compiler cant reason about it.
+    // machine, and so the compiler can't reason about it.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
     context.Rip = *reinterpret_cast<const volatile std::uintptr_t *>(context.Rsp);
     context.Rsp += sizeof(std::uintptr_t);
@@ -85,9 +85,10 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
     } while (get_instruction_ptr(context) != 0);
 }
 
-auto capture_stacktrace(const std::size_t entries_to_skip, const capture_stacktrace_cb callback) -> void {
+auto capture_stacktrace(std::size_t entries_to_skip, const capture_stacktrace_cb callback) -> void {
     CONTEXT context;
     RtlCaptureContext(&context);
+    increment_if_has_noinline(entries_to_skip);
     capture_stacktrace_from_mutable_context(context, entries_to_skip, callback);
 }
 

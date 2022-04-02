@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_SIMPLE_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_SIMPLE_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #include <iosfwd>
 #include <span>

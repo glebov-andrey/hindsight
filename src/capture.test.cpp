@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #include <algorithm>
 #include <concepts>
@@ -220,6 +220,21 @@ TEST_CASE("capture_stacktrace stops capturing when the range is full") {
     REQUIRE(last_captured == less_entries.end());
 }
 
+#ifdef HINDSIGHT_HAS_NOINLINE
+TEST_CASE("noinline: capture_stacktrace skips any internal entries (iterator + sentinel)") {
+    native_context_type context;
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
+    auto from_context = std::vector<stacktrace_entry>{};
+    capture_stacktrace_from_mutable_context(context, std::back_inserter(from_context), std::unreachable_sentinel);
+
+    auto from_capture_stacktrace = std::vector<stacktrace_entry>{};
+    capture_stacktrace(std::back_inserter(from_capture_stacktrace), std::unreachable_sentinel);
+
+    REQUIRE(from_context.size() == from_capture_stacktrace.size());
+    REQUIRE(std::ranges::equal(std::span{from_context}.subspan<1>(), std::span{from_capture_stacktrace}.subspan<1>()));
+}
+#endif
+
 #ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
     {
@@ -246,6 +261,22 @@ TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
         [[maybe_unused]] const auto dangling = capture_stacktrace(list_t(16));
     }
 }
+
+    #ifdef HINDSIGHT_HAS_NOINLINE
+TEST_CASE("noinline: capture_stacktrace skips any internal entries (range)") {
+    native_context_type context;
+    HINDSIGHT_TESTS_GET_CONTEXT(context);
+    auto from_context = std::vector<stacktrace_entry>{};
+    capture_stacktrace_from_mutable_context(context, std::back_inserter(from_context), std::unreachable_sentinel);
+
+    auto from_capture_stacktrace = std::vector<stacktrace_entry>{};
+    capture_stacktrace(std::ranges::subrange{std::back_inserter(from_capture_stacktrace), std::unreachable_sentinel});
+
+    REQUIRE(from_context.size() == from_capture_stacktrace.size());
+    REQUIRE(std::ranges::equal(std::span{from_context}.subspan<1>(), std::span{from_capture_stacktrace}.subspan<1>()));
+}
+    #endif
+
 #endif
 
 TEST_CASE("capture_stacktrace_from_context captures at least one entry for a local context") {

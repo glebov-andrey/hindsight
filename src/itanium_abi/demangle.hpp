@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_SRC_ITANIUM_ABI_DEMANGLE_HPP
 #define HINDSIGHT_SRC_ITANIUM_ABI_DEMANGLE_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #ifndef HINDSIGHT_OS_WINDOWS
 

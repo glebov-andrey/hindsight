@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_DETAIL_BSTR_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_DETAIL_BSTR_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #ifdef HINDSIGHT_OS_WINDOWS
 

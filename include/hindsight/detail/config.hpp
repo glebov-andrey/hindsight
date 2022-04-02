@@ -21,6 +21,8 @@
 
 #include <version>
 
+namespace hindsight::detail {
+
 #ifdef _WIN32
     #define HINDSIGHT_OS_WINDOWS
 #elif defined __unix__ || defined __unix || (defined __APPLE__ && defined __MACH__)
@@ -54,11 +56,29 @@
     #define HINDSIGHT_API
 #endif
 
-#if defined __GNUC__ && !defined __clang__
-    #define HINDSIGHT_PRAGMA_GCC(str) _Pragma(str)
-#else
-    #define HINDSIGHT_PRAGMA_GCC(str)
+
+#ifdef HINDSIGHT_NOINLINE
+    #error HINDSIGHT_NOINLINE must not be defined
 #endif
+
+#if __has_cpp_attribute(gnu::noinline)
+    #define HINDSIGHT_NOINLINE [[gnu::noinline]]
+#elif defined _MSC_VER
+    #define HINDSIGHT_NOINLINE __declspec(noinline)
+#endif
+
+#ifdef HINDSIGHT_NOINLINE
+    #define HINDSIGHT_HAS_NOINLINE
+#else
+    #define HINDSIGHT_NOINLINE
+
+[[deprecated("Could not detect a \"noinline\" attribute for the current compiler. "
+             "Stack traces may contain extra physical and logical entries.")]] //
+inline constexpr auto _noinline_not_detected_warn = 0;
+
+[[maybe_unused]] inline constexpr auto _noinline_not_detected = _noinline_not_detected_warn;
+#endif
+
 
 #if defined _MSC_VER && !defined __clang__
     #define HINDSIGHT_PRAGMA_MSVC(str) _Pragma(str)
@@ -68,7 +88,7 @@
 
 
 // <ranges> is broken with Clang and libstdc++ (as of Clang 13 and GCC 11).
-// 1. https://bugs.llvm.org/show_bug.cgi?id=44833.
+// 1. https://github.com/llvm/llvm-project/issues/44178.
 // 2. Since GCC 11, <ranges> omits typename, which Clang does not yet support.
 #if !(defined __clang__ && defined __GLIBCXX__)
     #define HINDSIGHT_HAS_STD_RANGES
@@ -110,5 +130,7 @@
         #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
     #endif
 #endif
+
+} // namespace hindsight::detail
 
 #endif // HINDSIGHT_INCLUDE_HINDSIGHT_CONFIG_HPP

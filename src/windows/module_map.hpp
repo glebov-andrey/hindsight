@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 #define HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #ifdef HINDSIGHT_OS_WINDOWS
 

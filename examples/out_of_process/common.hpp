@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_EXAMPLES_OUT_OF_PROCESS_COMMON_HPP
 #define HINDSIGHT_EXAMPLES_OUT_OF_PROCESS_COMMON_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #include <algorithm>
 #include <cassert>

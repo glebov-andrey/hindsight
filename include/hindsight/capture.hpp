@@ -19,13 +19,12 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_CAPTURE_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_CAPTURE_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
-#include <concepts>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 #include <type_traits>
-#include <utility>
 #ifdef HINDSIGHT_HAS_STD_RANGES
     #include <ranges>
 #endif
@@ -51,6 +50,14 @@ using native_context_type = ucontext_t;
 
 namespace detail {
 
+constexpr auto increment_if_has_noinline([[maybe_unused]] std::size_t &val) noexcept {
+#ifdef HINDSIGHT_HAS_NOINLINE
+    if (val != std::numeric_limits<std::size_t>::max()) {
+        ++val;
+    }
+#endif
+}
+
 // Returns true if done
 using capture_stacktrace_cb = tl::function_ref<bool(stacktrace_entry entry)>;
 
@@ -58,55 +65,46 @@ HINDSIGHT_API auto capture_stacktrace_from_mutable_context(native_context_type &
                                                            std::size_t entries_to_skip,
                                                            capture_stacktrace_cb callback) -> void;
 
-HINDSIGHT_API auto capture_stacktrace(std::size_t entries_to_skip, capture_stacktrace_cb callback) -> void;
+HINDSIGHT_NOINLINE HINDSIGHT_API auto capture_stacktrace(std::size_t entries_to_skip, capture_stacktrace_cb callback)
+        -> void;
 
 HINDSIGHT_API auto capture_stacktrace_from_context(const native_context_type &context,
                                                    std::size_t entries_to_skip,
                                                    capture_stacktrace_cb callback) -> void;
 
-template<std::invocable<std::size_t, capture_stacktrace_cb> ImplFunction,
-         std::output_iterator<stacktrace_entry> It,
-         std::sentinel_for<It> Sentinel>
-[[nodiscard]] auto capture_stacktrace_iterator_adapter(ImplFunction &&impl_function,
-                                                       It first,
-                                                       const Sentinel last,
-                                                       const std::size_t entries_to_skip)
-        -> std::conditional_t<std::forward_iterator<It>, It, void> {
-    if (first != last) {
-        std::forward<ImplFunction>(impl_function)(entries_to_skip, [&](const stacktrace_entry entry) -> bool {
-            *first++ = entry;
-            return first == last;
-        });
-    }
-
-    if constexpr (std::forward_iterator<It>) {
-        HINDSIGHT_PRAGMA_GCC("GCC diagnostic push") // NRVO can't happen because 'first' is a function parameter
-        HINDSIGHT_PRAGMA_GCC("GCC diagnostic ignored \"-Wredundant-move\"")
-        return std::move(first);
-        HINDSIGHT_PRAGMA_GCC("GCC diagnostic pop")
-    }
-}
-
 } // namespace detail
 
 template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
-[[nodiscard]] auto capture_stacktrace(It first, Sentinel last, const std::size_t entries_to_skip = 0)
+[[nodiscard]] HINDSIGHT_NOINLINE auto capture_stacktrace(It first, const Sentinel last, std::size_t entries_to_skip = 0)
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
-    return detail::capture_stacktrace_iterator_adapter([](const auto... args) { detail::capture_stacktrace(args...); },
-                                                       std::move(first),
-                                                       std::move(last),
-                                                       entries_to_skip);
+    if (first != last) {
+        detail::increment_if_has_noinline(entries_to_skip);
+        detail::capture_stacktrace(entries_to_skip, [&](const stacktrace_entry entry) {
+            *first = entry;
+            ++first;
+            return first == last;
+        });
+    }
+    if constexpr (std::forward_iterator<It>) {
+        return first;
+    }
 }
 
 #ifdef HINDSIGHT_HAS_STD_RANGES
 template<std::ranges::output_range<stacktrace_entry> Range>
-[[nodiscard]] auto capture_stacktrace(Range &&range, const std::size_t entries_to_skip = 0) {
+[[nodiscard]] HINDSIGHT_NOINLINE auto capture_stacktrace(Range &&range, std::size_t entries_to_skip = 0) {
+    auto first = std::ranges::begin(range);
+    const auto last = std::ranges::end(range);
+    if (first != last) {
+        detail::increment_if_has_noinline(entries_to_skip);
+        detail::capture_stacktrace(entries_to_skip, [&](const stacktrace_entry entry) {
+            *first = entry;
+            ++first;
+            return first == last;
+        });
+    }
     if constexpr (std::ranges::forward_range<Range>) {
-        return std::ranges::borrowed_subrange_t<Range>{
-                std::ranges::begin(range),
-                capture_stacktrace(std::ranges::begin(range), std::ranges::end(range), entries_to_skip)};
-    } else {
-        capture_stacktrace(std::ranges::begin(range), std::ranges::end(range), entries_to_skip);
+        return std::ranges::borrowed_subrange_t<Range>{std::ranges::begin(range), first};
     }
 }
 #endif
@@ -114,14 +112,19 @@ template<std::ranges::output_range<stacktrace_entry> Range>
 template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
 [[nodiscard]] auto capture_stacktrace_from_context(const native_context_type &context,
                                                    It first,
-                                                   Sentinel last,
+                                                   const Sentinel last,
                                                    const std::size_t entries_to_skip = 0)
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
-    return detail::capture_stacktrace_iterator_adapter(
-            [&context](const auto... args) { detail::capture_stacktrace_from_context(context, args...); },
-            std::move(first),
-            std::move(last),
-            entries_to_skip);
+    if (first != last) {
+        detail::capture_stacktrace_from_context(context, entries_to_skip, [&](const stacktrace_entry entry) {
+            *first = entry;
+            ++first;
+            return first == last;
+        });
+    }
+    if constexpr (std::forward_iterator<It>) {
+        return first;
+    }
 }
 
 #ifdef HINDSIGHT_HAS_STD_RANGES
@@ -144,16 +147,19 @@ template<std::ranges::output_range<stacktrace_entry> Range>
 template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
 [[nodiscard]] auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                                            It first,
-                                                           Sentinel last,
-                                                           // clang-tidy 12.0 warns even though this is a definition
-                                                           // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
+                                                           const Sentinel last,
                                                            const std::size_t entries_to_skip = 0)
         -> std::conditional_t<std::forward_iterator<It>, It, void> {
-    return detail::capture_stacktrace_iterator_adapter(
-            [&context](const auto... args) { detail::capture_stacktrace_from_mutable_context(context, args...); },
-            std::move(first),
-            std::move(last),
-            entries_to_skip);
+    if (first != last) {
+        detail::capture_stacktrace_from_mutable_context(context, entries_to_skip, [&](const stacktrace_entry entry) {
+            *first = entry;
+            ++first;
+            return first == last;
+        });
+    }
+    if constexpr (std::forward_iterator<It>) {
+        return first;
+    }
 }
 
 #ifdef HINDSIGHT_HAS_STD_RANGES

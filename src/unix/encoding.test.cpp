@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #ifdef HINDSIGHT_OS_UNIX
 

@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -33,7 +33,8 @@
 namespace hindsight {
 
 template<typename Allocator = std::allocator<stacktrace_entry>>
-[[nodiscard]] auto capture_stacktrace(const std::size_t entries_to_skip = 0, const Allocator &allocator = Allocator())
+[[nodiscard]] HINDSIGHT_NOINLINE auto capture_stacktrace(std::size_t entries_to_skip = 0,
+                                                         const Allocator &allocator = Allocator())
         -> std::vector<stacktrace_entry,
                        typename std::allocator_traits<Allocator>::template rebind_alloc<stacktrace_entry>> {
     static constexpr auto initial_stacktrace_capacity = std::size_t{16};
@@ -41,6 +42,7 @@ template<typename Allocator = std::allocator<stacktrace_entry>>
 
     auto entries = std::vector<stacktrace_entry, rebound_allocator>(allocator);
     entries.reserve(initial_stacktrace_capacity);
+    detail::increment_if_has_noinline(entries_to_skip);
     capture_stacktrace(std::back_inserter(entries), std::unreachable_sentinel, entries_to_skip);
     return entries;
 }

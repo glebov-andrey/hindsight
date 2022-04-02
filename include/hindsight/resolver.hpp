@@ -19,7 +19,7 @@
 #ifndef HINDSIGHT_INCLUDE_HINDSIGHT_RESOLVER_HPP
 #define HINDSIGHT_INCLUDE_HINDSIGHT_RESOLVER_HPP
 
-#include <hindsight/config.hpp>
+#include <hindsight/detail/config.hpp>
 
 #include <cstdint>
 #include <iterator>
