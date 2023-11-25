@@ -1,4 +1,4 @@
-# Copyright 2021 Andrey Glebov
+# Copyright 2023 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif ()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(hindsight_default_options INTERFACE -W4)
+    target_compile_options(hindsight_default_options INTERFACE -W4 -wd4251)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
     # -fno-show-column is a workaround for CLion not parsing the "file(line,column)" format
     target_compile_options(hindsight_default_options INTERFACE -W4 -Wpedantic -clang:-fno-show-column)

@@ -1,4 +1,4 @@
-# Copyright 2021 Andrey Glebov
+# Copyright 2023 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,9 +58,9 @@ include(tools/cmake/coverage.cmake)
 include(tools/cmake/clang_tidy.cmake)
 
 find_package(Threads REQUIRED)
-find_package(tl-function-ref 1.0.0 REQUIRED)
+find_package(tl-function-ref REQUIRED)
 if (HINDSIGHT_WITH_FMT)
-    find_package(fmt 8.0.1 REQUIRED)
+    find_package(fmt REQUIRED)
 endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(DIA REQUIRED)

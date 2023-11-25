@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2023 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,10 +44,14 @@ auto print_stacktrace_here() {
 
     auto entry_idx = std::size_t{};
     for (const auto entry : entries) {
-        fmt::print("{:02}: {}\n"sv, entry_idx, entry);
-        ++entry_idx;
         auto logical_entries = std::vector<hindsight::logical_stacktrace_entry>{};
         resolver.resolve(entry, std::back_inserter(logical_entries), std::unreachable_sentinel);
+        fmt::print("{:02}: {} ({})\n"sv,
+                   entry_idx,
+                   entry,
+                   logical_entries.empty() ? "<unknown module>"sv
+                                           : logical_entries.front().physical_module().filename().string());
+        ++entry_idx;
         for (const auto &logical : logical_entries) {
             auto source = logical.source();
             fmt::print("    {}{} ({}:{})\n"sv,

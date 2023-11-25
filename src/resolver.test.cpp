@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2023 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include <utility>
 #include <vector>
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <hindsight/resolver.hpp>
 #include <hindsight/stacktrace.hpp>

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2023 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,8 +79,8 @@ template<typename Char>
 constexpr auto stacktrace_entry_fmt_string = [] {
     using native_handle_type = stacktrace_entry::native_handle_type;
     static_assert(std::unsigned_integral<native_handle_type>);
-    constexpr auto is_32bit = std::numeric_limits<native_handle_type>::digits == 32;
-    constexpr auto is_64bit = std::numeric_limits<native_handle_type>::digits == 64;
+    [[maybe_unused]] constexpr auto is_32bit = std::numeric_limits<native_handle_type>::digits == 32;
+    [[maybe_unused]] constexpr auto is_64bit = std::numeric_limits<native_handle_type>::digits == 64;
     static_assert(is_32bit || is_64bit);
     static_assert(std::same_as<Char, char> || std::same_as<Char, wchar_t> || std::same_as<Char, char8_t> ||
                   std::same_as<Char, char16_t> || std::same_as<Char, char32_t>);

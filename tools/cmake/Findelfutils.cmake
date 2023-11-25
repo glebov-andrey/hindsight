@@ -1,4 +1,4 @@
-# Copyright 2021 Andrey Glebov
+# Copyright 2023 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ if (ELFUTILS_LIBDW_INCLUDE_DIRECTORY AND ELFUTILS_LIBDW_LIBRARY)
         message(
             WARNING "Found a static libdw library: ${ELFUTILS_LIBDW_LIBRARY}\n"
                     "Findelfutils does not support linking libdw statically\n"
-                    "Note that doing so would require distributing the produced library under the GPL 3.0 license!")
+                    "Note that doing so would require distributing the produced library under the (L)GPL 3.0 license!")
     endif ()
 endif ()
 

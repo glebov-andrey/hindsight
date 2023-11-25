@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2023 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ HINDSIGHT_PRAGMA_MSVC("warning(disable : 4389)") // '==': signed/unsigned mismat
 HINDSIGHT_PRAGMA_MSVC("warning(pop)")
 #endif
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <hindsight/stacktrace_entry.hpp>
 
@@ -161,8 +161,8 @@ TEST_CASE("stacktrace_entry's std::formatter specialization adds zero-padding") 
 
 TEST_CASE("stacktrace_entry's std::formatter specialization throws for a non-empty format specification") {
     constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
-    REQUIRE_THROWS_AS(std::format("{:x}", entry), std::format_error);
-    REQUIRE_THROWS_AS(std::format(L"{:x}", entry), std::format_error);
+    REQUIRE_THROWS_AS(std::vformat("{:x}", std::make_format_args(entry)), std::format_error);
+    REQUIRE_THROWS_AS(std::vformat(L"{:x}", std::make_wformat_args(entry)), std::format_error);
 }
 
 #endif
@@ -193,10 +193,8 @@ TEST_CASE("stacktrace_entry's fmt::formatter specialization adds zero-padding") 
 
 TEST_CASE("stacktrace_entry's fmt::formatter specialization throws for a non-empty format specification") {
     constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
-    #ifndef FMT_HAS_CONSTEVAL // with consteval this just doesn't compile
-    REQUIRE_THROWS_AS(fmt::format("{:x}", entry), fmt::format_error);
-    #endif
-    REQUIRE_THROWS_AS(fmt::format(L"{:x}", entry), fmt::format_error);
+    REQUIRE_THROWS_AS(fmt::format(fmt::runtime("{:x}"), entry), fmt::format_error);
+    REQUIRE_THROWS_AS(fmt::format(fmt::runtime(L"{:x}"), entry), fmt::format_error);
     REQUIRE_THROWS_AS(fmt::format(u8"{:x}", entry), fmt::format_error);
     REQUIRE_THROWS_AS(fmt::format(u"{:x}", entry), fmt::format_error);
     REQUIRE_THROWS_AS(fmt::format(U"{:x}", entry), fmt::format_error);

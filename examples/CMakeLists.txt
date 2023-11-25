@@ -1,4 +1,4 @@
-# Copyright 2021 Andrey Glebov
+# Copyright 2023 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-find_package(fmt 8.0.1 REQUIRED)
+find_package(fmt REQUIRED)
 
 add_executable(hindsight_print_stacktrace_here)
 target_link_libraries(hindsight_print_stacktrace_here PRIVATE hindsight::default_options hindsight::hindsight)

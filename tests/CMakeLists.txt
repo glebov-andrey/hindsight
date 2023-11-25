@@ -1,4 +1,4 @@
-# Copyright 2021 Andrey Glebov
+# Copyright 2023 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,11 +18,10 @@ find_package(Catch2 REQUIRED)
 
 add_executable(hindsight_tests)
 target_link_libraries(hindsight_tests PRIVATE hindsight::default_options hindsight::coverage_options hindsight_obj)
-target_link_libraries(hindsight_tests PRIVATE Catch2::Catch2)
+target_link_libraries(hindsight_tests PRIVATE Catch2::Catch2WithMain)
 if (BUILD_SHARED_LIBS)
     target_compile_definitions(hindsight_tests PRIVATE HINDSIGHT_SHARED_BUILD)
 endif ()
-target_sources(hindsight_tests PRIVATE main.cpp)
 
 include(Catch)
 catch_discover_tests(hindsight_tests)
