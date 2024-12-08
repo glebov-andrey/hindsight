@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,16 @@ inline constexpr auto _noinline_not_detected_warn = 0;
 [[maybe_unused]] inline constexpr auto _noinline_not_detected = _noinline_not_detected_warn;
 #endif
 
+#ifdef __has_builtin
+    #if __has_builtin(__builtin_unreachable)
+        #define HINDSIGHT_UNREACHABLE __builtin_unreachable()
+    #endif
+#elif defined _MSC_VER
+    #define HINDSIGHT_UNREACHABLE __assume(false)
+#else
+    #define HINDSIGHT_UNREACHABLE
+#endif
+
 
 #if defined _MSC_VER && !defined __clang__
     #define HINDSIGHT_PRAGMA_MSVC(str) _Pragma(str)
@@ -86,17 +96,10 @@ inline constexpr auto _noinline_not_detected_warn = 0;
     #define HINDSIGHT_PRAGMA_MSVC(str)
 #endif
 
-
-// <ranges> is broken with Clang and libstdc++ (as of Clang 13 and GCC 11).
-// 1. https://github.com/llvm/llvm-project/issues/44178.
-// 2. Since GCC 11, <ranges> omits typename, which Clang does not yet support.
-#if !(defined __clang__ && defined __GLIBCXX__)
-    #define HINDSIGHT_HAS_STD_RANGES
-#endif
-
-// The MSVC STL <format> implementation is disabled before 202105L due to https://github.com/microsoft/STL/issues/1961.
-#if __cpp_lib_format >= 201907L && (!defined _MSVC_STL_UPDATE || _MSVC_STL_UPDATE >= 202105L)
-    #define HINDSIGHT_HAS_STD_FORMAT
+#ifdef __clang__
+    #define HINDSIGHT_PRAGMA_CLANG(str) _Pragma(str)
+#else
+    #define HINDSIGHT_PRAGMA_CLANG(str)
 #endif
 
 

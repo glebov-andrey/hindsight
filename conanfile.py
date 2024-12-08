@@ -1,4 +1,4 @@
-# Copyright 2023 Andrey Glebov
+# Copyright 2024 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,8 +49,8 @@ class HindsightConan(ConanFile):
         "build_tests": False,
         "build_examples": False,
         "build_docs": False,
-
         "elfutils/*:shared": True,
+        "elfutils/*:libdebuginfod": True,
     }
 
     def config_options(self):
@@ -63,29 +63,27 @@ class HindsightConan(ConanFile):
 
     @property
     def _uses_libbacktrace(self):
-        return (self.settings.os != "Windows" and self.settings.os != "Linux") or \
-               (self.settings.os == "Linux" and self.options.resolver_backend == "libbacktrace")
-
-    _fmt_package_name = "fmt/[^10.1.1]"
+        return (self.settings.os != "Windows" and self.settings.os != "Linux") or (
+            self.settings.os == "Linux"
+            and self.options.resolver_backend == "libbacktrace"
+        )
 
     def requirements(self):
         self.requires("tl-function-ref/[^1.0.0]")
         if self.options.with_fmt:
-            self.requires(self._fmt_package_name)
+            self.requires("fmt/[^11.0.2]")
         if self.settings.os != "Windows":
-            self.requires("libunwind/[^1.7.2]")
+            self.requires("libunwind/[^1.8.1]")
         if self._uses_libdw:
-            self.requires("elfutils/0.189")
+            self.requires("elfutils/[^0.190]")
         if self._uses_libbacktrace:
-            self.requires("libbacktrace/cci.20210118")
+            self.requires("libbacktrace/cci.20240730")
 
     def build_requirements(self):
-        if self.options.build_examples and not self.options.with_fmt:
-            self.test_requires(self._fmt_package_name)
         if self.options.build_tests:
-            self.test_requires("catch2/[^3.4.0]")
+            self.test_requires("catch2/[^3.7.1]")
         if self.options.build_docs:
-            self.tool_requires("doxygen/[^1.9.4]")
+            self.tool_requires("doxygen/[^1.12.0]")
 
     def configure(self):
         if self.settings.os == "Windows" or self.options.shared:
@@ -93,9 +91,11 @@ class HindsightConan(ConanFile):
 
     def validate(self):
         check_min_cppstd(self, 20)
-        if self._uses_libdw and self.options["elfutils"].shared:
-            self.output.warn("Linking against a static build of libdw (part of elfutils).\n"
-                             "Doing so requires distributing the combined work under the (L)GPL 3.0 license!")
+        if self._uses_libdw and not self.dependencies["elfutils"].options.shared:
+            self.output.warning(
+                "Linking against a static build of libdw (part of elfutils).\n"
+                "Doing so requires distributing the combined work under the (L)GPL 3.0 license!"
+            )
 
     def layout(self):
         cmake_layout(self)
@@ -144,7 +144,9 @@ class HindsightConan(ConanFile):
         toolchain = CMakeToolchain(self)
         toolchain.variables["HINDSIGHT_WITH_FMT"] = self.options.with_fmt
         if self.settings.os == "Linux":
-            toolchain.variables["HINDSIGHT_RESOLVER_BACKEND"] = self.options.resolver_backend
+            toolchain.variables["HINDSIGHT_RESOLVER_BACKEND"] = (
+                self.options.resolver_backend
+            )
         toolchain.variables["HINDSIGHT_BUILD_TESTS"] = self.options.build_tests
         toolchain.variables["HINDSIGHT_BUILD_EXAMPLES"] = self.options.build_examples
         toolchain.variables["HINDSIGHT_BUILD_DOCS"] = self.options.build_docs
@@ -159,8 +161,15 @@ class HindsightConan(ConanFile):
             cmake.test()
 
     def package(self):
-        copy(self, "LICENSE.txt", src=self.source_path, dst=self.package_path / "licenses")
-        copy(self, "NOTICE.txt", src=self.source_path, dst=self.package_path / "licenses")
+        copy(
+            self,
+            "LICENSE.txt",
+            src=self.source_path,
+            dst=self.package_path / "licenses",
+        )
+        copy(
+            self, "NOTICE.txt", src=self.source_path, dst=self.package_path / "licenses"
+        )
         cmake = CMake(self)
         cmake.install()
 

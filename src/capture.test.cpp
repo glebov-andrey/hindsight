@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,9 @@
 #include <concepts>
 #include <forward_list>
 #include <iterator>
+#include <ranges>
 #include <span>
 #include <vector>
-#ifdef HINDSIGHT_HAS_STD_RANGES
-    #include <ranges>
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -137,7 +135,6 @@ TEST_CASE("capture_stacktrace_from_mutable_context stops capturing when the rang
     REQUIRE(last_captured == less_entries.end());
 }
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace_from_mutable_context captures entries into ranges (range)") {
     native_context_type context;
     HINDSIGHT_TESTS_GET_CONTEXT(context);
@@ -170,7 +167,6 @@ TEST_CASE("capture_stacktrace_from_mutable_context captures entries into ranges 
         [[maybe_unused]] const auto dangling = capture_stacktrace_from_mutable_context(tmp_context, list_t(16));
     }
 }
-#endif
 
 TEST_CASE("capture_stacktrace captures at least one entry") {
     auto entries = std::vector<stacktrace_entry>{};
@@ -235,7 +231,6 @@ TEST_CASE("noinline: capture_stacktrace skips any internal entries (iterator + s
 }
 #endif
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
     {
         auto entries = std::vector<stacktrace_entry>{};
@@ -262,7 +257,7 @@ TEST_CASE("capture_stacktrace captures entries info ranges (range)") {
     }
 }
 
-    #ifdef HINDSIGHT_HAS_NOINLINE
+#ifdef HINDSIGHT_HAS_NOINLINE
 TEST_CASE("noinline: capture_stacktrace skips any internal entries (range)") {
     native_context_type context;
     HINDSIGHT_TESTS_GET_CONTEXT(context);
@@ -275,9 +270,8 @@ TEST_CASE("noinline: capture_stacktrace skips any internal entries (range)") {
     REQUIRE(from_context.size() == from_capture_stacktrace.size());
     REQUIRE(std::ranges::equal(std::span{from_context}.subspan<1>(), std::span{from_capture_stacktrace}.subspan<1>()));
 }
-    #endif
-
 #endif
+
 
 TEST_CASE("capture_stacktrace_from_context captures at least one entry for a local context") {
     native_context_type context;
@@ -342,7 +336,6 @@ TEST_CASE("capture_stacktrace_from_context stops capturing when the range is ful
     REQUIRE(last_captured == less_entries.end());
 }
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
 TEST_CASE("capture_stacktrace_from_context captures entries info ranges (range)") {
     native_context_type context;
     HINDSIGHT_TESTS_GET_CONTEXT(context);
@@ -372,6 +365,5 @@ TEST_CASE("capture_stacktrace_from_context captures entries info ranges (range)"
         [[maybe_unused]] const auto dangling = capture_stacktrace_from_context(context, list_t(16));
     }
 }
-#endif
 
 } // namespace hindsight

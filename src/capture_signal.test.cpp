@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ template<bool RollbackContext>
         }
     }};
 #elif defined HINDSIGHT_OS_UNIX
-    struct sigaction sig_action {};
+    struct sigaction sig_action{};
     sig_action.sa_sigaction = [](int /* signo */, siginfo_t * /* info */, void *const context_ptr) noexcept {
         auto &context = *static_cast<native_context_type *>(context_ptr);
         std::atomic_signal_fence(std::memory_order::acquire);
@@ -143,7 +143,7 @@ template<bool RollbackContext>
         }
     };
     sig_action.sa_flags = SA_SIGINFO;
-    struct sigaction old_sig_action {};
+    struct sigaction old_sig_action{};
     if (sigaction(SIGSEGV, &sig_action, &old_sig_action) != 0) {
         throw std::system_error{errno, std::system_category(), "Failed to set the SIGSEGV handler"};
     }

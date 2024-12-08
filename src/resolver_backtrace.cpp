@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
     #include <new>
     #include <optional>
     #include <string_view>
+
+    #include <dlfcn.h>
 
     #include <backtrace.h>
 
@@ -84,11 +86,13 @@ auto encode_file_name(const std::string &raw_file_name, const auto get_transcode
 } // namespace
 
 logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
+                                                   std::filesystem::path physical_module,
                                                    std::string raw_symbol,
                                                    std::string raw_file_name,
                                                    const std::uint_least32_t line_number,
                                                    const bool is_inline) noexcept
         : m_physical{physical},
+          m_physical_module{std::move(physical_module)},
           m_raw_symbol{std::move(raw_symbol)},
           m_raw_file_name{std::move(raw_file_name)},
           m_line_number{line_number},
@@ -118,17 +122,10 @@ auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
 resolver::resolver() = default;
 
 auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
-    const auto on_failure = [&] { callback(logical_stacktrace_entry{entry}); };
-
-    auto *const global_state = get_backtrace_state();
-    if (!global_state) {
-        on_failure();
-        return;
-    }
-
     struct cb_state {
         const stacktrace_entry entry;
         const resolve_cb callback;
+        std::filesystem::path physical_module{};
         std::optional<logical_stacktrace_entry> buffered_entry = std::nullopt;
         std::exception_ptr exception = nullptr;
 
@@ -148,6 +145,19 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
         }
     } state{.entry = entry, .callback = callback};
 
+    auto dl_info = Dl_info{};
+    if (dladdr(reinterpret_cast<void *>(entry.native_handle()), &dl_info)) {
+        state.physical_module = dl_info.dli_fname;
+    }
+
+    const auto on_failure = [&] { callback(logical_stacktrace_entry{entry, std::move(state.physical_module)}); };
+
+    auto *const global_state = get_backtrace_state();
+    if (!global_state) {
+        on_failure();
+        return;
+    }
+
     backtrace_pcinfo(
             global_state,
             entry.native_handle(),
@@ -163,6 +173,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
                     }
                     state.buffered_entry = logical_stacktrace_entry{
                             state.entry,
+                            state.physical_module,
                             std::string{function ? std::string_view{function} : std::string_view{}},
                             std::string{filename ? std::string_view{filename} : std::string_view{}},
                             static_cast<std::uint_least32_t>(lineno),

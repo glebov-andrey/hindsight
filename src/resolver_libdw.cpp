@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -294,6 +294,7 @@ auto encode_file_name(const std::string &raw_file_name, const auto get_transcode
 
 
 logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
+                                                   std::filesystem::path physical_module,
                                                    std::string raw_symbol,
                                                    std::string raw_file_name,
                                                    const std::uint_least32_t line_number,
@@ -301,6 +302,7 @@ logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physic
                                                    const bool maybe_mangled,
                                                    const bool is_inline) noexcept
         : m_physical{physical},
+          m_physical_module{std::move(physical_module)},
           m_raw_symbol{std::move(raw_symbol)},
           m_raw_file_name{std::move(raw_file_name)},
           m_line_number{line_number},
@@ -333,6 +335,7 @@ class resolver::impl {
 public:
     struct callback_state {
         const stacktrace_entry entry;
+        std::filesystem::path physical_module{};
         const resolve_cb callback;
 
         bool entry_issued = false;
@@ -443,19 +446,20 @@ private:
     }
 
     static auto resolve_in_module(Dwfl_Module &module, callback_state &cb_state) -> void {
-        const auto cudie_and_addr_in_cu = find_compilation_unit(module, cb_state.entry);
-        if (!cudie_and_addr_in_cu) {
-            resolve_in_symbol_table(module, cb_state);
-            return;
+        if (const auto *const module_name =
+                    dwfl_module_info(&module, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr)) {
+            cb_state.physical_module = module_name;
         }
-        const auto &[compilation_unit, address_in_cu] = *cudie_and_addr_in_cu;
 
-        auto die_stack = depth_first_search_for_address(compilation_unit, address_in_cu);
-        if (die_stack.empty()) {
-            resolve_in_symbol_table(module, cb_state);
-            return;
+        if (const auto cudie_and_addr_in_cu = find_compilation_unit(module, cb_state.entry)) {
+            const auto &[compilation_unit, address_in_cu] = *cudie_and_addr_in_cu;
+            auto die_stack = depth_first_search_for_address(compilation_unit, address_in_cu);
+            if (!die_stack.empty()) {
+                resolve_from_dfs_die_stack(std::move(die_stack), compilation_unit, address_in_cu, cb_state);
+                return;
+            }
         }
-        resolve_from_dfs_die_stack(std::move(die_stack), compilation_unit, address_in_cu, cb_state);
+        resolve_in_symbol_table(module, cb_state);
     }
 
     using dfs_die_stack_entry = std::pair<Dwarf_Die, bool /* explored */>;
@@ -504,14 +508,15 @@ private:
             if (is_function(die) && die_has_address(die, address_in_cu)) {
                 const auto is_inline = is_inline_function(die);
                 const auto [function_name, maybe_mangled] = func_name_search::search(die);
-                if (cb_state.submit(
-                            logical_stacktrace_entry{cb_state.entry,
-                                                     function_name,
-                                                     source_location ? source_location->file_name : std::string{},
-                                                     source_location ? source_location->line_number : 0,
-                                                     source_location ? source_location->column_number : 0,
-                                                     maybe_mangled,
-                                                     is_inline})) {
+                if (cb_state.submit(logical_stacktrace_entry{
+                            cb_state.entry,
+                            is_inline ? cb_state.physical_module : std::move(cb_state.physical_module),
+                            function_name,
+                            source_location ? source_location->file_name : std::string{},
+                            source_location ? source_location->line_number : 0,
+                            source_location ? source_location->column_number : 0,
+                            maybe_mangled,
+                            is_inline})) {
                     return;
                 }
                 if (!is_inline) {
@@ -534,7 +539,14 @@ private:
                                                              nullptr,
                                                              nullptr);
         if (symbol_name) {
-            cb_state.submit(logical_stacktrace_entry{cb_state.entry, symbol_name, {}, 0, 0, true, false});
+            cb_state.submit(logical_stacktrace_entry{cb_state.entry,
+                                                     std::move(cb_state.physical_module),
+                                                     symbol_name,
+                                                     {},
+                                                     0,
+                                                     0,
+                                                     true,
+                                                     false});
         } else {
             cb_state.on_failure();
         }

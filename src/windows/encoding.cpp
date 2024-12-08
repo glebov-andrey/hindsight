@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 #ifdef HINDSIGHT_OS_WINDOWS
 
     #include <cassert>
-    #include <concepts>
     #include <limits>
     #include <system_error>
 
@@ -34,12 +33,8 @@ namespace {
 template<typename CharT>
     requires(sizeof(CharT) == 1)
 [[nodiscard]] auto as_char_ptr(CharT *const ptr) noexcept -> char * {
-    if constexpr (std::same_as<CharT, char>) {
-        return ptr;
-    } else {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): safe because `char *` can alias anything
-        return reinterpret_cast<char *>(ptr);
-    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): safe because `char *` can alias anything
+    return reinterpret_cast<char *>(ptr);
 }
 
 template<typename CharT>

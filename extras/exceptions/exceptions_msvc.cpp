@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@
 #include <detours.h>
 
 #include <hindsight/capture.hpp>
+#include <hindsight/detail/config.hpp>
 
 namespace hindsight {
 
@@ -117,15 +118,18 @@ __declspec(noreturn) void __stdcall detour_CxxThrowException(void *const pExcept
                                                              _ThrowInfo *const pThrowInfo) {
     const auto [entry, inserted] = stack_trace_map.try_emplace(pExceptionObject);
     assert(inserted);
-    capture_stacktrace(std::back_inserter(entry->second), std::unreachable_sentinel);
+    capture_stacktrace(std::back_inserter(entry->second), std::unreachable_sentinel, 1);
 
     original_CxxThrowException(pExceptionObject, pThrowInfo);
 }
 
 void __cdecl detour_DestructExceptionObject(EHExceptionRecord *const pExcept, const BOOLEAN fThrowNotAllowed) {
+    HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
+    HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wmultichar\"")
     if (pExcept == nullptr || !PER_IS_MSVC_EH(pExcept)) {
         return;
     }
+    HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
     stack_trace_map.erase(pExcept->params.pExceptionObject);
 
     original_DestructExceptionObject(pExcept, fThrowNotAllowed);
@@ -198,6 +202,7 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_
 
         throw;
     }
+    HINDSIGHT_UNREACHABLE;
 }
 
 } // namespace

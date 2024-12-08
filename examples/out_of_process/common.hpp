@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,11 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdio>
+#include <format>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <print>
 #include <span>
 #include <stdexcept>
 #include <system_error>
@@ -45,8 +47,6 @@
     #include <fcntl.h>
     #include <unistd.h>
 #endif
-
-#include <fmt/format.h>
 
 namespace hindsight::out_of_process {
 
@@ -71,6 +71,19 @@ private:
     static constexpr auto invalid_handle_value = -1;
     int m_descriptor{invalid_handle_value};
 };
+
+} // namespace hindsight::out_of_process
+
+template<>
+struct std::formatter<hindsight::out_of_process::os_handle> : std::formatter<int> {
+    template<typename FormatCtx>
+    constexpr auto format(const hindsight::out_of_process::os_handle handle, FormatCtx &ctx) const
+            -> FormatCtx::iterator {
+        return std::formatter<int>::format(static_cast<int>(handle), ctx);
+    }
+};
+
+namespace hindsight::out_of_process {
 #endif
 
 struct close_os_handle {
@@ -93,15 +106,15 @@ using unique_os_handle = std::unique_ptr<os_handle, close_os_handle>;
 
 
 template<typename... Args>
-[[noreturn]] auto throw_runtime_error(const fmt::format_string<Args...> format_str, Args &&...args) -> void {
-    auto fmt_buffer = fmt::memory_buffer{};
-    fmt::format_to(std::back_inserter(fmt_buffer), format_str, std::forward<Args>(args)...);
-    fmt_buffer.push_back('\0');
-    throw std::runtime_error{fmt_buffer.data()};
+[[noreturn]] auto throw_runtime_error(const std::format_string<Args...> format_str, Args &&...args) -> void {
+    auto message = std::string{};
+    std::format_to(std::back_inserter(message), format_str, std::forward<Args>(args)...);
+    message.push_back('\0');
+    throw std::runtime_error{message};
 }
 
 template<typename... Args>
-[[noreturn]] auto throw_last_system_error(const fmt::format_string<Args...> format_str, Args &&...args) -> void {
+[[noreturn]] auto throw_last_system_error(const std::format_string<Args...> format_str, Args &&...args) -> void {
 #ifdef HINDSIGHT_OS_WINDOWS
     const auto last_error = static_cast<int>(GetLastError());
 #elif defined HINDSIGHT_OS_UNIX
@@ -109,15 +122,15 @@ template<typename... Args>
 #else
     #error throw_last_system_error is not implemented for this OS
 #endif
-    auto fmt_buffer = fmt::memory_buffer{};
-    fmt::format_to(std::back_inserter(fmt_buffer), format_str, std::forward<Args>(args)...);
-    fmt_buffer.push_back('\0');
-    throw std::system_error{last_error, std::system_category(), fmt_buffer.data()};
+    auto message = std::string{};
+    std::format_to(std::back_inserter(message), format_str, std::forward<Args>(args)...);
+    message.push_back('\0');
+    throw std::system_error{last_error, std::system_category(), message.data()};
 }
 
 template<typename... Args>
-void print_log(const fmt::format_string<Args...> format_str, Args &&...args) {
-    fmt::print(stderr, format_str, std::forward<Args>(args)...);
+void print_log(const std::format_string<Args...> format_str, Args &&...args) {
+    std::print(stderr, format_str, std::forward<Args>(args)...);
 }
 
 

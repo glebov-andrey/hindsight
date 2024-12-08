@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,8 @@
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <ranges>
 #include <type_traits>
-#ifdef HINDSIGHT_HAS_STD_RANGES
-    #include <ranges>
-#endif
 
 #include <tl/function_ref.hpp>
 
@@ -90,7 +88,6 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
     }
 }
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
 template<std::ranges::output_range<stacktrace_entry> Range>
 [[nodiscard]] HINDSIGHT_NOINLINE auto capture_stacktrace(Range &&range, std::size_t entries_to_skip = 0) {
     auto first = std::ranges::begin(range);
@@ -107,7 +104,6 @@ template<std::ranges::output_range<stacktrace_entry> Range>
         return std::ranges::borrowed_subrange_t<Range>{std::ranges::begin(range), first};
     }
 }
-#endif
 
 template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
 [[nodiscard]] auto capture_stacktrace_from_context(const native_context_type &context,
@@ -127,7 +123,6 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
     }
 }
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
 template<std::ranges::output_range<stacktrace_entry> Range>
 [[nodiscard]] auto capture_stacktrace_from_context(const native_context_type &context,
                                                    Range &&range,
@@ -142,7 +137,6 @@ template<std::ranges::output_range<stacktrace_entry> Range>
         capture_stacktrace_from_context(context, std::ranges::begin(range), std::ranges::end(range), entries_to_skip);
     }
 }
-#endif
 
 template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
 [[nodiscard]] auto capture_stacktrace_from_mutable_context(native_context_type &context,
@@ -162,7 +156,6 @@ template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentin
     }
 }
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
 template<std::ranges::output_range<stacktrace_entry> Range>
 [[nodiscard]] auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                                            Range &&range,
@@ -181,7 +174,6 @@ template<std::ranges::output_range<stacktrace_entry> Range>
                                                 entries_to_skip);
     }
 }
-#endif
 
 } // namespace hindsight
 

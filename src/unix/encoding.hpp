@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,17 +37,16 @@ class iconv_handle {
 public:
     [[nodiscard]] iconv_handle() = default;
 
-    // NOLINTNEXTLINE(hicpp-explicit-conversions): the implicit conversion is intended
-    [[nodiscard]] explicit(false) iconv_handle(const iconv_t handle) noexcept : m_handle{handle} {}
+    [[nodiscard]] explicit(false) iconv_handle(std::nullptr_t) noexcept {}
 
     // NOLINTNEXTLINE(hicpp-explicit-conversions): the implicit conversion is intended
-    [[nodiscard]] explicit(false) operator iconv_t() const noexcept { return m_handle; }
+    [[nodiscard]] explicit iconv_handle(const iconv_t handle) noexcept : m_handle{handle} {}
+
+    [[nodiscard]] explicit operator bool() const noexcept { return m_handle != invalid_handle_value; }
 
     [[nodiscard]] friend auto operator==(iconv_handle lhs, iconv_handle rhs) -> bool = default;
 
-    [[nodiscard]] friend auto operator==(const iconv_handle lhs, std::nullptr_t /* rhs */) {
-        return lhs.m_handle == invalid_handle_value;
-    }
+    [[nodiscard]] auto get() const noexcept -> iconv_t { return m_handle; }
 
 private:
     // POSIX does not specify whether iconv_t is a pointer or some other handle type
@@ -60,7 +59,7 @@ struct destroy_iconv {
     using pointer = iconv_handle;
 
     auto operator()(const iconv_handle handle) const noexcept {
-        [[maybe_unused]] const auto result = iconv_close(handle);
+        [[maybe_unused]] const auto result = iconv_close(handle.get());
         assert(result == 0);
     }
 };

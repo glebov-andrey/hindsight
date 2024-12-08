@@ -1,4 +1,4 @@
-# Copyright 2023 Andrey Glebov
+# Copyright 2024 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ find_package(fmt REQUIRED)
 
 add_executable(hindsight_print_stacktrace_here)
 target_link_libraries(hindsight_print_stacktrace_here PRIVATE hindsight::default_options hindsight::hindsight)
-target_link_libraries(hindsight_print_stacktrace_here PRIVATE fmt::fmt)
+target_compile_features(hindsight_print_stacktrace_here PRIVATE cxx_std_23)
 set_target_clang_tidy(hindsight_print_stacktrace_here)
 
 target_sources(hindsight_print_stacktrace_here PRIVATE print_stacktrace_here.cpp)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,12 @@
 #include <hindsight/detail/config.hpp>
 
 #include <compare>
+#include <format>
 #include <iomanip>
 #include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
-#ifdef HINDSIGHT_HAS_STD_FORMAT
-    #include <format>
-#endif
 
 #ifdef HINDSIGHT_WITH_FMT
 HINDSIGHT_PRAGMA_MSVC("warning(push)")
@@ -145,8 +143,6 @@ TEST_CASE("stacktrace_entry's operator<< adds zero-padding and does not change t
     }
 }
 
-#ifdef HINDSIGHT_HAS_STD_FORMAT
-
 TEST_CASE("stacktrace_entry's std::formatter specialization produces a hexadecimal number") {
     constexpr auto entry = stacktrace_entry{from_native_handle, large_uintptr_value};
     REQUIRE(std::format("{}", entry) == large_uintptr_string);
@@ -164,8 +160,6 @@ TEST_CASE("stacktrace_entry's std::formatter specialization throws for a non-emp
     REQUIRE_THROWS_AS(std::vformat("{:x}", std::make_format_args(entry)), std::format_error);
     REQUIRE_THROWS_AS(std::vformat(L"{:x}", std::make_wformat_args(entry)), std::format_error);
 }
-
-#endif
 
 #ifdef HINDSIGHT_WITH_FMT
 

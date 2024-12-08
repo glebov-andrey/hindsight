@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,7 @@
  */
 
 #include <iostream>
-
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+#include <print>
 
 #include <hindsight/simple.hpp>
 
@@ -27,7 +25,7 @@
 
 struct A {
     ~A() {
-        fmt::print(std::cerr, "\n~A()\n");
+        std::println(std::cerr, "\n~A()");
         hindsight::print_stacktrace_here();
     }
 };
@@ -41,7 +39,7 @@ int main() {
         // const auto entries = hindsight::stack_trace_from_current_exception();
         const auto ex = std::current_exception();
         const auto entries = hindsight::stack_trace_from_exception(ex);
-        fmt::print(std::cerr, "\nhindsight::stack_trace_from_current_exception\n");
+        std::println(std::cerr, "\nhindsight::stack_trace_from_current_exception");
         hindsight::print_stacktrace(std::cerr, entries);
     }
 }

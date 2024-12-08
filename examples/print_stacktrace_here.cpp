@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,10 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
-#include <limits>
+#include <print>
 #include <string_view>
 #include <utility>
 #include <vector>
-
-#include <fmt/format.h>
-#ifndef HINDSIGHT_WITH_FMT
-    #include <fmt/ostream.h>
-#endif
 
 #include <hindsight/resolver.hpp>
 #include <hindsight/stacktrace.hpp>
@@ -38,7 +33,7 @@ auto print_stacktrace_here() {
     using namespace std::string_view_literals;
 
     const auto entries = hindsight::capture_stacktrace();
-    fmt::print("Captured {} stacktrace entries\n"sv, entries.size());
+    std::println("Captured {} stacktrace entries"sv, entries.size());
 
     auto resolver = hindsight::resolver{};
 
@@ -46,19 +41,19 @@ auto print_stacktrace_here() {
     for (const auto entry : entries) {
         auto logical_entries = std::vector<hindsight::logical_stacktrace_entry>{};
         resolver.resolve(entry, std::back_inserter(logical_entries), std::unreachable_sentinel);
-        fmt::print("{:02}: {} ({})\n"sv,
-                   entry_idx,
-                   entry,
-                   logical_entries.empty() ? "<unknown module>"sv
-                                           : logical_entries.front().physical_module().filename().string());
+        std::println("{:02}: {} ({})"sv,
+                     entry_idx,
+                     entry,
+                     logical_entries.empty() ? "<unknown module>"sv
+                                             : logical_entries.front().physical_module().filename().string());
         ++entry_idx;
         for (const auto &logical : logical_entries) {
             auto source = logical.source();
-            fmt::print("    {}{} ({}:{})\n"sv,
-                       logical.is_inline() ? "[inline] "sv : "         "sv,
-                       logical.symbol(),
-                       source.file_name,
-                       source.line_number);
+            std::println("    {}{} ({}:{})"sv,
+                         logical.is_inline() ? "[inline] "sv : "         "sv,
+                         logical.symbol(),
+                         source.file_name,
+                         source.line_number);
         }
     }
 }

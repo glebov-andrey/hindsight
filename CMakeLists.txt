@@ -1,4 +1,4 @@
-# Copyright 2023 Andrey Glebov
+# Copyright 2024 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ else ()
     if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw")
         target_link_libraries(hindsight_obj PRIVATE elfutils::libdw)
     else ()
-        target_link_libraries(hindsight_obj PRIVATE libbacktrace::libbacktrace)
+        target_link_libraries(hindsight_obj PRIVATE libbacktrace::libbacktrace ${CMAKE_DL_LIBS})
     endif ()
     target_link_libraries(hindsight_obj PRIVATE Iconv::Iconv)
 endif ()

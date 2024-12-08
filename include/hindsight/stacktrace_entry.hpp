@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,19 +22,16 @@
 #include <hindsight/detail/config.hpp>
 
 #include <compare>
+#include <concepts>
 #include <cstdint>
+#include <format>
 #include <iosfwd>
-#if defined HINDSIGHT_HAS_STD_FORMAT || defined HINDSIGHT_WITH_FMT
-    #include <concepts>
-    #include <limits>
-    #include <string_view>
-    #ifdef HINDSIGHT_HAS_STD_FORMAT
-        #include <format>
-        #include <iterator>
-    #endif
-    #ifdef HINDSIGHT_WITH_FMT
-        #include <fmt/format.h>
-    #endif
+#include <iterator>
+#include <limits>
+#include <string_view>
+
+#ifdef HINDSIGHT_WITH_FMT
+    #include <fmt/format.h>
 #endif
 
 namespace hindsight {
@@ -72,7 +69,6 @@ private:
     native_handle_type m_handle{};
 };
 
-#if defined HINDSIGHT_HAS_STD_FORMAT || defined HINDSIGHT_WITH_FMT
 namespace detail {
 
 template<typename Char>
@@ -86,13 +82,13 @@ constexpr auto stacktrace_entry_fmt_string = [] {
                   std::same_as<Char, char16_t> || std::same_as<Char, char32_t>);
 
     using namespace std::string_view_literals;
-    // One character per 4 bits + 2 characters for "0x":
-    #define HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(prefix)                                                  \
-        if constexpr (is_32bit) {                                                                                      \
-            return prefix##"{:#010x}"sv;                                                                               \
-        } else if constexpr (is_64bit) {                                                                               \
-            return prefix##"{:#018x}"sv;                                                                               \
-        }
+// One character per 4 bits + 2 characters for "0x":
+#define HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(prefix)                                                      \
+    if constexpr (is_32bit) {                                                                                          \
+        return prefix##"{:#010x}"sv;                                                                                   \
+    } else if constexpr (is_64bit) {                                                                                   \
+        return prefix##"{:#018x}"sv;                                                                                   \
+    }
     if constexpr (std::same_as<Char, char>) {
         HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL()
     } else if constexpr (std::same_as<Char, wchar_t>) {
@@ -104,12 +100,13 @@ constexpr auto stacktrace_entry_fmt_string = [] {
     } else if constexpr (std::same_as<Char, char32_t>) {
         HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(U)
     }
-    #undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
+#undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
 }();
 
 template<typename CharT, void (&ThrowFormatError)()>
 struct stacktrace_entry_format_parser {
-    constexpr auto parse(auto &context) const {
+    template<typename ParseCtx>
+    constexpr auto parse(ParseCtx &context) const -> ParseCtx::iterator {
         auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
         if (it != context.end() && *it != CharT{'}'}) {
             ThrowFormatError();
@@ -118,40 +115,33 @@ struct stacktrace_entry_format_parser {
     }
 };
 
-    #ifdef HINDSIGHT_HAS_STD_FORMAT
 [[noreturn]] HINDSIGHT_API auto throw_std_format_error() -> void;
-    #endif
 
-    #ifdef HINDSIGHT_WITH_FMT
+#ifdef HINDSIGHT_WITH_FMT
 [[noreturn]] HINDSIGHT_API auto throw_fmt_format_error() -> void;
-    #endif
-
-} // namespace detail
 #endif
 
-} // namespace hindsight
+} // namespace detail
 
-#ifdef HINDSIGHT_HAS_STD_FORMAT
+} // namespace hindsight
 
 template<typename CharT>
 struct std::formatter<hindsight::stacktrace_entry, CharT>
         : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_std_format_error> {
-    template<output_iterator<const CharT &> OutputIt>
-    auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const {
+    template<typename OutputIt>
+    auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const
+            -> basic_format_context<OutputIt, CharT>::iterator {
         return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<CharT>, entry.native_handle());
     }
 };
-
-#endif
 
 #ifdef HINDSIGHT_WITH_FMT
 
 template<typename CharT>
 struct fmt::formatter<hindsight::stacktrace_entry, CharT>
         : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_fmt_format_error> {
-    template<typename OutputIt>
-    constexpr auto format(const hindsight::stacktrace_entry entry,
-                          basic_format_context<OutputIt, CharT> &context) const {
+    template<typename FormatCtx>
+    constexpr auto format(const hindsight::stacktrace_entry entry, FormatCtx &context) const -> FormatCtx::iterator {
         return fmt::format_to(context.out(),
                               hindsight::detail::stacktrace_entry_fmt_string<CharT>,
                               entry.native_handle());

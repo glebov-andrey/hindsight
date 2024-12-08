@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,15 +51,13 @@ auto operator<<(std::wostream &stream, const stacktrace_entry entry) -> std::wos
 
 namespace detail {
 
-#ifdef HINDSIGHT_HAS_STD_FORMAT
 auto throw_std_format_error() -> void {
-    throw std::format_error{"invalid format specification for hindsight::stacktrace_entry"};
+    throw std::format_error{"Invalid format specification for hindsight::stacktrace_entry"};
 }
-#endif
 
 #ifdef HINDSIGHT_WITH_FMT
 auto throw_fmt_format_error() -> void {
-    throw fmt::format_error{"invalid format specification for hindsight::stacktrace_entry"};
+    throw fmt::format_error{"Invalid format specification for hindsight::stacktrace_entry"};
 }
 #endif
 

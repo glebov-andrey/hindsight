@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,11 @@
 #include <hindsight/detail/config.hpp>
 
 #include <cstdint>
+#include <filesystem>
 #include <iterator>
+#include <ranges>
 #include <string>
 #include <utility>
-#ifdef HINDSIGHT_HAS_STD_RANGES
-    #include <ranges>
-#endif
 #if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA ||                                                    \
         HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_LIBDW
     #include <memory>
@@ -64,6 +63,8 @@ public:
 
     [[nodiscard]] auto physical() const noexcept -> stacktrace_entry { return m_physical; }
 
+    [[nodiscard]] auto physical_module() const noexcept -> const std::filesystem::path & { return m_physical_module; }
+
     [[nodiscard]] auto symbol() const -> std::string;
     [[nodiscard]] auto u8_symbol() const -> std::u8string;
 
@@ -74,6 +75,7 @@ public:
 
 private:
     stacktrace_entry m_physical{};
+    std::filesystem::path m_physical_module{};
 #if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA
     detail::bstr m_symbol{};
     detail::bstr m_file_name{};
@@ -91,16 +93,24 @@ private:
 
     friend class resolver;
 
-    HINDSIGHT_API_HIDDEN explicit logical_stacktrace_entry(stacktrace_entry physical) noexcept : m_physical{physical} {}
+    HINDSIGHT_API_HIDDEN explicit logical_stacktrace_entry(const stacktrace_entry physical) noexcept
+            : m_physical{physical} {}
+
+    HINDSIGHT_API_HIDDEN explicit logical_stacktrace_entry(const stacktrace_entry physical,
+                                                           std::filesystem::path physical_module) noexcept
+            : m_physical{physical},
+              m_physical_module{std::move(physical_module)} {}
 
 #if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA
     HINDSIGHT_API_HIDDEN logical_stacktrace_entry(stacktrace_entry physical,
+                                                  std::filesystem::path physical_module,
                                                   detail::bstr symbol,
                                                   detail::bstr file_name,
                                                   std::uint_least32_t line_number,
                                                   bool is_inline) noexcept;
 #else
     HINDSIGHT_API_HIDDEN logical_stacktrace_entry(stacktrace_entry physical,
+                                                  std::filesystem::path physical_module,
                                                   std::string raw_symbol,
                                                   std::string raw_file_name,
                                                   std::uint_least32_t line_number,
@@ -114,6 +124,7 @@ private:
     HINDSIGHT_API friend auto swap(logical_stacktrace_entry &lhs, logical_stacktrace_entry &rhs) noexcept -> void {
         using std::swap;
         swap(lhs.m_physical, rhs.m_physical);
+        swap(lhs.m_physical_module, rhs.m_physical_module);
 #if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA
         swap(lhs.m_symbol, rhs.m_symbol);
         swap(lhs.m_file_name, rhs.m_file_name);
@@ -192,7 +203,6 @@ public:
         }
     }
 
-#ifdef HINDSIGHT_HAS_STD_RANGES
     template<std::ranges::output_range<logical_stacktrace_entry> Range>
     [[nodiscard]] auto resolve(const stacktrace_entry entry, Range &&range) {
         if constexpr (std::ranges::forward_range<Range>) {
@@ -203,7 +213,6 @@ public:
             resolve(entry, std::ranges::begin(range), std::ranges::end(range));
         }
     }
-#endif
 
 private:
     // Returns true if done

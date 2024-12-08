@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2024 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ template<typename CharT>
 } // namespace
 
 auto create_transcoder(const char *from, const char *to) -> unique_iconv {
-    auto conversion = unique_iconv{iconv_open(to, from)};
+    auto conversion = unique_iconv{iconv_handle{iconv_open(to, from)}};
     if (!conversion) {
         using namespace std::string_view_literals;
         auto message = std::ostringstream{};
@@ -123,18 +123,18 @@ auto create_utf8_to_current_transcoder() -> unique_iconv {
                                   static_cast<locale_t>(0));
     const auto locale_guard = util::finally{[&]() noexcept { freelocale(locale); }};
     const auto *const codeset = nl_langinfo_l(CODESET, locale);
-    auto conversion = unique_iconv{iconv_open(codeset, utf8_encoding_name)};
+    auto conversion = unique_iconv{iconv_handle{iconv_open(codeset, utf8_encoding_name)}};
     return create_transcoder(utf8_encoding_name, codeset);
 }
 
 auto get_utf8_sanitizer() -> iconv_t {
     thread_local static const auto conversion = create_utf8_sanitizer();
-    return conversion.get();
+    return conversion.get().get();
 }
 
 auto get_utf8_to_current_transcoder() -> iconv_t {
     thread_local static const auto conversion = create_utf8_to_current_transcoder();
-    return conversion.get();
+    return conversion.get().get();
 }
 
 auto transcode(const iconv_t conversion, const std::string_view input, std::in_place_type_t<char> /* char_type */)
