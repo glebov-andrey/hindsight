@@ -214,7 +214,7 @@ private:
                 dia_data_source.reset(static_cast<IDiaDataSource *>(dia_data_source_void));
             }
             // TODO: Allow the user to specify a custom search path
-            if (const auto result = dia_data_source->loadDataForExe(module_info->file_name.c_str(), nullptr, nullptr);
+            if (const auto result = dia_data_source->loadDataForExe(module_info.file_name.c_str(), nullptr, nullptr);
                 FAILED(result)) {
                 return nullptr;
             }

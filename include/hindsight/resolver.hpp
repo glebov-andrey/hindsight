@@ -32,8 +32,7 @@
     #include <memory>
 #endif
 
-#include <tl/function_ref.hpp>
-
+#include <hindsight/detail/function_ref.hpp>
 #include <hindsight/stacktrace.hpp>
 
 #if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA
@@ -216,7 +215,7 @@ public:
 
 private:
     // Returns true if done
-    using resolve_cb = tl::function_ref<bool(logical_stacktrace_entry &&logical)>;
+    using resolve_cb = detail::function_ref<bool(logical_stacktrace_entry &&logical)>;
 
     auto resolve_impl(stacktrace_entry entry, resolve_cb callback) -> void;
 

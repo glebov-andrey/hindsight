@@ -27,10 +27,8 @@
 #include <ranges>
 #include <type_traits>
 
-#include <tl/function_ref.hpp>
-
+#include <hindsight/detail/function_ref.hpp>
 #include <hindsight/stacktrace_entry.hpp>
-
 
 #ifdef HINDSIGHT_OS_WINDOWS
 using CONTEXT = struct _CONTEXT; // NOLINT(bugprone-reserved-identifier): CONTEXT is defined like this in Windows.h
@@ -57,7 +55,7 @@ constexpr auto increment_if_has_noinline([[maybe_unused]] std::size_t &val) noex
 }
 
 // Returns true if done
-using capture_stacktrace_cb = tl::function_ref<bool(stacktrace_entry entry)>;
+using capture_stacktrace_cb = function_ref<bool(stacktrace_entry entry)>;
 
 HINDSIGHT_API auto capture_stacktrace_from_mutable_context(native_context_type &context,
                                                            std::size_t entries_to_skip,

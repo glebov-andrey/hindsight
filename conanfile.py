@@ -69,7 +69,6 @@ class HindsightConan(ConanFile):
         )
 
     def requirements(self):
-        self.requires("tl-function-ref/[^1.0.0]")
         if self.options.with_fmt:
             self.requires("fmt/[^11.0.2]")
         if self.settings.os != "Windows":
@@ -101,7 +100,7 @@ class HindsightConan(ConanFile):
         cmake_layout(self)
         self.cpp.build.libs = ["hindsight"]
 
-        self.cpp.build.requires = ["tl-function-ref::tl-function-ref"]
+        self.cpp.build.requires = []
         if self.options.with_fmt:
             self.cpp.build.requires.append("fmt::fmt")
         if self.settings.os != "Windows":
