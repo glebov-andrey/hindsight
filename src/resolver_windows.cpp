@@ -22,6 +22,7 @@
     #include <hindsight/resolver.hpp>
 
     #include <cassert>
+    #include <tuple>
     #include <unordered_map>
     #include <utility>
     #include <variant>
@@ -49,10 +50,9 @@ namespace {
     return symbol_name;
 }
 
-[[nodiscard]] auto get_source_location(IDiaSession &session,
-                                       IDiaSymbol &symbol,
-                                       const stacktrace_entry physical,
-                                       const bool is_inline) -> std::pair<detail::bstr, std::uint_least32_t> {
+[[nodiscard]] auto
+get_source_location(IDiaSession &session, IDiaSymbol &symbol, const stacktrace_entry physical, const bool is_inline)
+        -> std::tuple<detail::bstr, std::uint_least32_t, std::uint_least32_t> {
     auto lines = windows::com_ptr<IDiaEnumLineNumbers>{};
     if (is_inline) {
         if (const auto result = session.findInlineeLinesByVA(&symbol, physical.native_handle(), 1, &lines);
@@ -82,7 +82,9 @@ namespace {
     }
     auto line_number = DWORD{};
     line->get_lineNumber(&line_number);
-    return {std::move(file_name), line_number};
+    auto column_number = DWORD{};
+    line->get_columnNumber(&column_number);
+    return {std::move(file_name), line_number, column_number};
 }
 
 } // namespace
@@ -92,12 +94,14 @@ logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physic
                                                    detail::bstr symbol,
                                                    detail::bstr file_name,
                                                    const std::uint_least32_t line_number,
+                                                   const std::uint_least32_t column_number,
                                                    const bool is_inline) noexcept
         : m_physical{physical},
           m_physical_module{std::move(physical_module)},
           m_symbol{std::move(symbol)},
           m_file_name{std::move(file_name)},
           m_line_number{line_number},
+          m_column_number{column_number},
           m_is_inline{is_inline} {}
 
 auto logical_stacktrace_entry::symbol() const -> std::string { return windows::wide_to_narrow(m_symbol); }
@@ -105,11 +109,15 @@ auto logical_stacktrace_entry::symbol() const -> std::string { return windows::w
 auto logical_stacktrace_entry::u8_symbol() const -> std::u8string { return windows::wide_to_utf8(m_symbol); }
 
 auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name = windows::wide_to_narrow(m_file_name), .line_number = m_line_number, .column_number = 0};
+    return {.file_name = windows::wide_to_narrow(m_file_name),
+            .line_number = m_line_number,
+            .column_number = m_column_number};
 }
 
 auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    return {.file_name = windows::wide_to_utf8(m_file_name), .line_number = m_line_number, .column_number = 0};
+    return {.file_name = windows::wide_to_utf8(m_file_name),
+            .line_number = m_line_number,
+            .column_number = m_column_number};
 }
 
 
@@ -139,12 +147,13 @@ public:
             auto physical_module = is_inline ? std::filesystem::path{module_info->file_name}
                                              : std::filesystem::path{std::move(module_info->file_name)};
             auto symbol_name = get_symbol_name(symbol);
-            auto [file_name, line_number] = get_source_location(*session, symbol, entry, is_inline);
+            auto [file_name, line_number, column_number] = get_source_location(*session, symbol, entry, is_inline);
             return callback(logical_stacktrace_entry{entry,
                                                      std::move(physical_module),
                                                      std::move(symbol_name),
                                                      std::move(file_name),
                                                      line_number,
+                                                     column_number,
                                                      is_inline});
         };
 

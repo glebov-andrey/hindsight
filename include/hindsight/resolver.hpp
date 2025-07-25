@@ -79,6 +79,7 @@ private:
     detail::bstr m_symbol{};
     detail::bstr m_file_name{};
     std::uint_least32_t m_line_number{};
+    std::uint_least32_t m_column_number{};
 #else
     std::string m_raw_symbol{};
     std::string m_raw_file_name{};
@@ -106,6 +107,7 @@ private:
                                                   detail::bstr symbol,
                                                   detail::bstr file_name,
                                                   std::uint_least32_t line_number,
+                                                  std::uint_least32_t column_number,
                                                   bool is_inline) noexcept;
 #else
     HINDSIGHT_API_HIDDEN logical_stacktrace_entry(stacktrace_entry physical,

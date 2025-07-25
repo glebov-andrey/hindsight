@@ -49,11 +49,12 @@ auto print_stacktrace_here() {
         ++entry_idx;
         for (const auto &logical : logical_entries) {
             auto source = logical.source();
-            std::println("    {}{} ({}:{})"sv,
+            std::println("    {}{} ({}:{}:{})"sv,
                          logical.is_inline() ? "[inline] "sv : "         "sv,
                          logical.symbol(),
                          source.file_name,
-                         source.line_number);
+                         source.line_number,
+                         source.column_number);
         }
     }
 }
