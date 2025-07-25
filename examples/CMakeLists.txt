@@ -14,8 +14,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-find_package(fmt REQUIRED)
-
 add_executable(hindsight_print_stacktrace_here)
 target_link_libraries(hindsight_print_stacktrace_here PRIVATE hindsight::default_options hindsight::hindsight)
 target_compile_features(hindsight_print_stacktrace_here PRIVATE cxx_std_23)

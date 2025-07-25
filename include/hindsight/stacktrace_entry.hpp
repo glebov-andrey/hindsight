@@ -30,10 +30,6 @@
 #include <limits>
 #include <string_view>
 
-#ifdef HINDSIGHT_WITH_FMT
-    #include <fmt/format.h>
-#endif
-
 namespace hindsight {
 
 struct from_native_handle_t {
@@ -103,51 +99,28 @@ constexpr auto stacktrace_entry_fmt_string = [] {
 #undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
 }();
 
-template<typename CharT, void (&ThrowFormatError)()>
-struct stacktrace_entry_format_parser {
-    template<typename ParseCtx>
-    constexpr auto parse(ParseCtx &context) const -> ParseCtx::iterator {
-        auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
-        if (it != context.end() && *it != CharT{'}'}) {
-            ThrowFormatError();
-        }
-        return it;
-    }
-};
-
 [[noreturn]] HINDSIGHT_API auto throw_std_format_error() -> void;
-
-#ifdef HINDSIGHT_WITH_FMT
-[[noreturn]] HINDSIGHT_API auto throw_fmt_format_error() -> void;
-#endif
 
 } // namespace detail
 
 } // namespace hindsight
 
 template<typename CharT>
-struct std::formatter<hindsight::stacktrace_entry, CharT>
-        : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_std_format_error> {
+struct std::formatter<hindsight::stacktrace_entry, CharT> {
+    template<typename ParseCtx>
+    constexpr auto parse(ParseCtx &context) const -> ParseCtx::iterator {
+        auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
+        if (it != context.end() && *it != CharT{'}'}) {
+            hindsight::detail::throw_std_format_error();
+        }
+        return it;
+    }
+
     template<typename OutputIt>
     auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const
             -> basic_format_context<OutputIt, CharT>::iterator {
         return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<CharT>, entry.native_handle());
     }
 };
-
-#ifdef HINDSIGHT_WITH_FMT
-
-template<typename CharT>
-struct fmt::formatter<hindsight::stacktrace_entry, CharT>
-        : hindsight::detail::stacktrace_entry_format_parser<CharT, hindsight::detail::throw_fmt_format_error> {
-    template<typename FormatCtx>
-    constexpr auto format(const hindsight::stacktrace_entry entry, FormatCtx &context) const -> FormatCtx::iterator {
-        return fmt::format_to(context.out(),
-                              hindsight::detail::stacktrace_entry_fmt_string<CharT>,
-                              entry.native_handle());
-    }
-};
-
-#endif
 
 #endif // HINDSIGHT_INCLUDE_HINDSIGHT_STACKTRACE_ENTRY_HPP

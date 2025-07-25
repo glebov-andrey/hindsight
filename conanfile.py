@@ -35,7 +35,6 @@ class HindsightConan(ConanFile):
     options = {
         "shared": [False, True],
         "fPIC": [False, True],
-        "with_fmt": [False, True],
         "resolver_backend": ["libdw", "libbacktrace"],
         "build_tests": [False, True],
         "build_examples": [False, True],
@@ -44,7 +43,6 @@ class HindsightConan(ConanFile):
     default_options = {
         "shared": False,
         "fPIC": True,
-        "with_fmt": False,
         "resolver_backend": "libdw",
         "build_tests": False,
         "build_examples": False,
@@ -69,8 +67,6 @@ class HindsightConan(ConanFile):
         )
 
     def requirements(self):
-        if self.options.with_fmt:
-            self.requires("fmt/[^11.0.2]")
         if self.settings.os != "Windows":
             self.requires("libunwind/[^1.8.1]")
         if self._uses_libdw:
@@ -101,8 +97,6 @@ class HindsightConan(ConanFile):
         self.cpp.build.libs = ["hindsight"]
 
         self.cpp.build.requires = []
-        if self.options.with_fmt:
-            self.cpp.build.requires.append("fmt::fmt")
         if self.settings.os != "Windows":
             self.cpp.build.requires.append("libunwind::generic")
         if self._uses_libdw:
@@ -117,8 +111,6 @@ class HindsightConan(ConanFile):
         self.cpp.build.defines = []
         if self.options.shared:
             self.cpp.build.defines.append("HINDSIGHT_SHARED")
-        if self.options.with_fmt:
-            self.cpp.build.defines.append("HINDSIGHT_WITH_FMT")
         if self.settings.os == "Linux" and self.options.resolver_backend != "libdw":
             backend_macro = f"HINDSIGHT_RESOLVER_BACKEND_{str(self.options.resolver_backend).upper()}"
             self.cpp.build.defines.append(f"HINDSIGHT_RESOLVER_BACKEND={backend_macro}")
@@ -141,7 +133,6 @@ class HindsightConan(ConanFile):
 
     def generate(self):
         toolchain = CMakeToolchain(self)
-        toolchain.variables["HINDSIGHT_WITH_FMT"] = self.options.with_fmt
         if self.settings.os == "Linux":
             toolchain.variables["HINDSIGHT_RESOLVER_BACKEND"] = (
                 self.options.resolver_backend

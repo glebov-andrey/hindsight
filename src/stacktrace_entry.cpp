@@ -55,12 +55,6 @@ auto throw_std_format_error() -> void {
     throw std::format_error{"Invalid format specification for hindsight::stacktrace_entry"};
 }
 
-#ifdef HINDSIGHT_WITH_FMT
-auto throw_fmt_format_error() -> void {
-    throw fmt::format_error{"Invalid format specification for hindsight::stacktrace_entry"};
-}
-#endif
-
 } // namespace detail
 
 } // namespace hindsight

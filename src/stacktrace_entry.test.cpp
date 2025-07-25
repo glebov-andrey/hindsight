@@ -26,14 +26,6 @@
 #include <string>
 #include <string_view>
 
-#ifdef HINDSIGHT_WITH_FMT
-HINDSIGHT_PRAGMA_MSVC("warning(push)")
-HINDSIGHT_PRAGMA_MSVC("warning(disable : 4389)") // '==': signed/unsigned mismatch (comparing char32_t to char)
-    #include <fmt/format.h>
-    #include <fmt/xchar.h>
-HINDSIGHT_PRAGMA_MSVC("warning(pop)")
-#endif
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <hindsight/stacktrace_entry.hpp>
@@ -160,40 +152,5 @@ TEST_CASE("stacktrace_entry's std::formatter specialization throws for a non-emp
     REQUIRE_THROWS_AS(std::vformat("{:x}", std::make_format_args(entry)), std::format_error);
     REQUIRE_THROWS_AS(std::vformat(L"{:x}", std::make_wformat_args(entry)), std::format_error);
 }
-
-#ifdef HINDSIGHT_WITH_FMT
-
-    #ifdef FMT_OSTREAM_H_
-        #error <fmt/ostream.h> must not be included in this file so that the fmt::formatter specialization can be tested
-    #endif
-
-TEST_CASE("stacktrace_entry's fmt::formatter specialization produces a hexadecimal number") {
-    constexpr auto entry = stacktrace_entry{from_native_handle, large_uintptr_value};
-    REQUIRE(fmt::format("{}", entry) == large_uintptr_string);
-    REQUIRE(fmt::format(L"{}", entry) == large_uintptr_wstring);
-    REQUIRE(fmt::format(u8"{}", entry) == large_uintptr_u8string);
-    REQUIRE(fmt::format(u"{}", entry) == large_uintptr_u16string);
-    REQUIRE(fmt::format(U"{}", entry) == large_uintptr_u32string);
-}
-
-TEST_CASE("stacktrace_entry's fmt::formatter specialization adds zero-padding") {
-    constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
-    REQUIRE(fmt::format("{}", entry) == small_uintptr_string);
-    REQUIRE(fmt::format(L"{}", entry) == small_uintptr_wstring);
-    REQUIRE(fmt::format(u8"{}", entry) == small_uintptr_u8string);
-    REQUIRE(fmt::format(u"{}", entry) == small_uintptr_u16string);
-    REQUIRE(fmt::format(U"{}", entry) == small_uintptr_u32string);
-}
-
-TEST_CASE("stacktrace_entry's fmt::formatter specialization throws for a non-empty format specification") {
-    constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
-    REQUIRE_THROWS_AS(fmt::format(fmt::runtime("{:x}"), entry), fmt::format_error);
-    REQUIRE_THROWS_AS(fmt::format(fmt::runtime(L"{:x}"), entry), fmt::format_error);
-    REQUIRE_THROWS_AS(fmt::format(u8"{:x}", entry), fmt::format_error);
-    REQUIRE_THROWS_AS(fmt::format(u"{:x}", entry), fmt::format_error);
-    REQUIRE_THROWS_AS(fmt::format(U"{:x}", entry), fmt::format_error);
-}
-
-#endif
 
 } // namespace hindsight

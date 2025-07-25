@@ -23,7 +23,6 @@ project(
     HOMEPAGE_URL "https://github.com/glebov-andrey/hindsight"
     LANGUAGES CXX)
 
-option(HINDSIGHT_WITH_FMT "Enable native fmt support" OFF)
 option(HINDSIGHT_BUILD_TESTS "Build tests" ON)
 option(HINDSIGHT_BUILD_EXAMPLES "Build examples" OFF)
 option(HINDSIGHT_BUILD_DOCS "Build documentation" OFF)
@@ -40,7 +39,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif ()
 endif ()
 
-message(STATUS "hindsight: Enable native fmt support: ${HINDSIGHT_WITH_FMT}")
 message(STATUS "hindsight: Build tests: ${HINDSIGHT_BUILD_TESTS}")
 message(STATUS "hindsight: Build examples: ${HINDSIGHT_BUILD_EXAMPLES}")
 message(STATUS "hindsight: Build documentation: ${HINDSIGHT_BUILD_DOCS}")
@@ -58,10 +56,6 @@ include(tools/cmake/coverage.cmake)
 include(tools/cmake/clang_tidy.cmake)
 
 find_package(Threads REQUIRED)
-find_package(tl-function-ref REQUIRED)
-if (HINDSIGHT_WITH_FMT)
-    find_package(fmt REQUIRED)
-endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(DIA REQUIRED)
 else ()
@@ -86,10 +80,6 @@ if (BUILD_SHARED_LIBS)
         hindsight_obj
         PUBLIC HINDSIGHT_SHARED
         PRIVATE HINDSIGHT_SHARED_BUILD)
-endif ()
-if (HINDSIGHT_WITH_FMT)
-    target_compile_definitions(hindsight_obj PUBLIC HINDSIGHT_WITH_FMT)
-    target_link_libraries(hindsight_obj PUBLIC fmt::fmt)
 endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libbacktrace")
     target_compile_definitions(
