@@ -1,4 +1,4 @@
-# Copyright 2023 Andrey Glebov
+# Copyright 2025 Andrey Glebov
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-find_package(Catch2 REQUIRED)
+if (HINDSIGHT_CATCH2_FETCH_CONTENT)
+    include(FetchContent)
+    FetchContent_Declare(
+        Catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG fee81626d2a4811095c3a39d20fb355eeb954101 # v3.9.0
+    )
+    FetchContent_MakeAvailable(Catch2)
+else ()
+    find_package(Catch2 REQUIRED)
+endif ()
 
 add_executable(hindsight_tests)
 target_link_libraries(hindsight_tests PRIVATE hindsight::default_options hindsight::coverage_options hindsight_obj)

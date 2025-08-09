@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.21)
 
 project(
     hindsight
@@ -23,7 +23,9 @@ project(
     HOMEPAGE_URL "https://github.com/glebov-andrey/hindsight"
     LANGUAGES CXX)
 
-option(HINDSIGHT_BUILD_TESTS "Build tests" ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(HINDSIGHT_BUILD_TESTS "Build tests" ${PROJECT_IS_TOP_LEVEL})
 option(HINDSIGHT_BUILD_EXAMPLES "Build examples" OFF)
 option(HINDSIGHT_BUILD_DOCS "Build documentation" OFF)
 option(HINDSIGHT_ENABLE_COVERAGE "Enable coverage" OFF)
@@ -38,6 +40,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(FATAL_ERROR "HINDSIGHT_RESOLVER_BACKEND, if set, must be either \"libdw\" or \"libbacktrace\"")
     endif ()
 endif ()
+option(HINDSIGHT_CATCH2_FETCH_CONTENT "Use FetchContent to get Catch2" OFF)
 
 message(STATUS "hindsight: Build tests: ${HINDSIGHT_BUILD_TESTS}")
 message(STATUS "hindsight: Build examples: ${HINDSIGHT_BUILD_EXAMPLES}")
@@ -48,6 +51,7 @@ message(STATUS "hindsight: Enable lld ThinLTO cache: ${HINDSIGHT_ENABLE_LLD_THIN
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(STATUS "hindsight: Resolver backend: ${HINDSIGHT_RESOLVER_BACKEND}")
 endif ()
+message(STATUS "hindsight: Use FetchContext to get Catch2: ${HINDSIGHT_CATCH2_FETCH_CONTENT}")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
 
