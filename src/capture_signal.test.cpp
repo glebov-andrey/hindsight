@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Andrey Glebov
+ * Copyright 2025 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,13 +108,13 @@ template<bool RollbackContext>
 [[nodiscard]] auto register_signal_handler() {
 #ifdef HINDSIGHT_OS_WINDOWS
     const auto handler =
-            AddVectoredExceptionHandler(TRUE, [](EXCEPTION_POINTERS *const exception_info) noexcept -> LONG {
+            AddVectoredExceptionHandler(TRUE, [](EXCEPTION_POINTERS *const exception_pointers) noexcept -> LONG {
                 std::atomic_signal_fence(std::memory_order::acquire);
-                last_captured_signal_entry = capture_stacktrace_from_context(*exception_info->ContextRecord,
-                                                                             sig_begin(signal_entries),
-                                                                             sig_end(signal_entries));
+                last_captured_signal_entry = capture_stacktrace_from_signal(exception_pointers,
+                                                                            sig_begin(signal_entries),
+                                                                            sig_end(signal_entries));
                 if constexpr (RollbackContext) {
-                    *exception_info->ContextRecord = pre_violation_context;
+                    *exception_pointers->ContextRecord = pre_violation_context;
                     do_violation = false;
                 }
                 std::atomic_signal_fence(std::memory_order::release);
@@ -130,11 +130,11 @@ template<bool RollbackContext>
     }};
 #elif defined HINDSIGHT_OS_UNIX
     struct sigaction sig_action{};
-    sig_action.sa_sigaction = [](int /* signo */, siginfo_t * /* info */, void *const context_ptr) noexcept {
-        auto &context = *static_cast<native_context_type *>(context_ptr);
+    sig_action.sa_sigaction = [](const int signo, siginfo_t *const info, void *const context) noexcept {
         std::atomic_signal_fence(std::memory_order::acquire);
-        last_captured_signal_entry =
-                capture_stacktrace_from_context(context, sig_begin(signal_entries), sig_end(signal_entries));
+        last_captured_signal_entry = capture_stacktrace_from_signal({signo, info, context},
+                                                                    sig_begin(signal_entries),
+                                                                    sig_end(signal_entries));
         std::atomic_signal_fence(std::memory_order::release);
 
         if constexpr (RollbackContext) {
@@ -158,6 +158,7 @@ template<bool RollbackContext>
 auto check_signal_stacktrace() {
     REQUIRE(last_captured_signal_entry > sig_begin(signal_entries));
     REQUIRE(last_captured_signal_entry <= sig_end(signal_entries));
+    REQUIRE(std::ranges::distance(sig_begin(signal_entries), last_captured_signal_entry) > 2);
     REQUIRE(std::ranges::all_of(sig_begin(signal_entries), last_captured_signal_entry, [](const auto entry) {
         return entry != stacktrace_entry{};
     }));
@@ -165,7 +166,7 @@ auto check_signal_stacktrace() {
 
 } // namespace
 
-TEST_CASE("capture_stacktrace_from_context can capture a stacktrace from a signal-frame context (raise)") {
+TEST_CASE("capture_stacktrace_from_signal can capture a stacktrace from a signal-frame context (raise)") {
     {
         const auto guard = register_signal_handler<false>();
         reset_signal_stacktrace();
@@ -174,7 +175,7 @@ TEST_CASE("capture_stacktrace_from_context can capture a stacktrace from a signa
     check_signal_stacktrace();
 }
 
-TEST_CASE("capture_stacktrace_from_context can capture a stacktrace from a signal-frame context (write at nullptr)") {
+TEST_CASE("capture_stacktrace_from_signal can capture a stacktrace from a signal-frame context (write at nullptr)") {
     {
         const auto guard = register_signal_handler<true>();
         reset_signal_stacktrace();
@@ -183,7 +184,7 @@ TEST_CASE("capture_stacktrace_from_context can capture a stacktrace from a signa
     check_signal_stacktrace();
 }
 
-TEST_CASE("capture_stacktrace_from_context can capture a stacktrace from a signal-frame context (execute nullptr)") {
+TEST_CASE("capture_stacktrace_from_signal can capture a stacktrace from a signal-frame context (execute nullptr)") {
     {
         const auto guard = register_signal_handler<true>();
         reset_signal_stacktrace();

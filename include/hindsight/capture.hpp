@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Andrey Glebov
+ * Copyright 2025 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,11 @@
 #include <hindsight/stacktrace_entry.hpp>
 
 #ifdef HINDSIGHT_OS_WINDOWS
-using CONTEXT = struct _CONTEXT; // NOLINT(bugprone-reserved-identifier): CONTEXT is defined like this in Windows.h
+using CONTEXT = struct _CONTEXT; // NOLINT(bugprone-reserved-identifier)
+using EXCEPTION_POINTERS = struct _EXCEPTION_POINTERS; // NOLINT(bugprone-reserved-identifier)
 #else
-using ucontext_t = struct ucontext_t;
+    #include <signal.h> // siginfo_t
+    #include <ucontext.h> // ucontext_t
 #endif
 
 namespace hindsight {
@@ -42,6 +44,16 @@ namespace hindsight {
 using native_context_type = CONTEXT;
 #else
 using native_context_type = ucontext_t;
+#endif
+
+#ifdef HINDSIGHT_OS_WINDOWS
+using native_signal_parameters = const EXCEPTION_POINTERS *;
+#else
+struct native_signal_parameters {
+    int signo;
+    const siginfo_t *info;
+    const void *context;
+};
 #endif
 
 namespace detail {
@@ -57,16 +69,20 @@ constexpr auto increment_if_has_noinline([[maybe_unused]] std::size_t &val) noex
 // Returns true if done
 using capture_stacktrace_cb = function_ref<bool(stacktrace_entry entry)>;
 
-HINDSIGHT_API auto capture_stacktrace_from_mutable_context(native_context_type &context,
-                                                           std::size_t entries_to_skip,
-                                                           capture_stacktrace_cb callback) -> void;
-
 HINDSIGHT_NOINLINE HINDSIGHT_API auto capture_stacktrace(std::size_t entries_to_skip, capture_stacktrace_cb callback)
         -> void;
 
 HINDSIGHT_API auto capture_stacktrace_from_context(const native_context_type &context,
                                                    std::size_t entries_to_skip,
                                                    capture_stacktrace_cb callback) -> void;
+
+HINDSIGHT_API auto capture_stacktrace_from_mutable_context(native_context_type &context,
+                                                           std::size_t entries_to_skip,
+                                                           capture_stacktrace_cb callback) -> void;
+
+HINDSIGHT_API auto capture_stacktrace_from_signal(native_signal_parameters params,
+                                                  std::size_t entries_to_skip,
+                                                  capture_stacktrace_cb callback) -> void;
 
 } // namespace detail
 
@@ -170,6 +186,39 @@ template<std::ranges::output_range<stacktrace_entry> Range>
                                                 std::ranges::begin(range),
                                                 std::ranges::end(range),
                                                 entries_to_skip);
+    }
+}
+
+template<std::output_iterator<stacktrace_entry> It, std::sentinel_for<It> Sentinel>
+[[nodiscard]] auto capture_stacktrace_from_signal(const native_signal_parameters params,
+                                                  It first,
+                                                  const Sentinel last,
+                                                  const std::size_t entries_to_skip = 0)
+        -> std::conditional_t<std::forward_iterator<It>, It, void> {
+    if (first != last) {
+        detail::capture_stacktrace_from_signal(params, entries_to_skip, [&](const stacktrace_entry entry) {
+            *first = entry;
+            ++first;
+            return first == last;
+        });
+    }
+    if constexpr (std::forward_iterator<It>) {
+        return first;
+    }
+}
+
+template<std::ranges::output_range<stacktrace_entry> Range>
+[[nodiscard]] auto capture_stacktrace_from_mutable_context(const native_signal_parameters params,
+                                                           Range &&range,
+                                                           const std::size_t entries_to_skip = 0) {
+    if constexpr (std::ranges::forward_range<Range>) {
+        return std::ranges::borrowed_subrange_t<Range>{std::ranges::begin(range),
+                                                       capture_stacktrace_from_signal(params,
+                                                                                      entries_to_skip,
+                                                                                      std::ranges::begin(range),
+                                                                                      std::ranges::end(range))};
+    } else {
+        capture_stacktrace_from_signal(params, entries_to_skip, std::ranges::begin(range), std::ranges::end(range));
     }
 }
 

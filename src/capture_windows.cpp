@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2025 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,20 +50,21 @@ auto skip_leaf_function(CONTEXT &context) noexcept {
     #endif
 }
 
-} // namespace
-
-auto capture_stacktrace_from_mutable_context(native_context_type &context,
-                                             std::size_t entries_to_skip,
-                                             const capture_stacktrace_cb callback) -> void {
+auto capture_stacktrace_impl(native_context_type &context,
+                             std::size_t entries_to_skip,
+                             bool is_signal_frame,
+                             const capture_stacktrace_cb callback) -> void {
     do {
-        if (get_instruction_ptr(context)) {
-            if (entries_to_skip == 0) {
-                if (callback({from_native_handle, get_instruction_ptr(context) - 1})) {
-                    break;
-                }
-            } else {
-                --entries_to_skip;
+        if (entries_to_skip == 0) {
+            auto instruction_ptr = get_instruction_ptr(context);
+            if (!is_signal_frame) {
+                --instruction_ptr;
             }
+            if (callback({from_native_handle, instruction_ptr})) {
+                break;
+            }
+        } else {
+            --entries_to_skip;
         }
 
         auto image_base = ULONG_PTR{};
@@ -82,21 +83,44 @@ auto capture_stacktrace_from_mutable_context(native_context_type &context,
         } else {
             skip_leaf_function(context);
         }
+        is_signal_frame = false;
     } while (get_instruction_ptr(context) != 0);
 }
+
+} // namespace
 
 auto capture_stacktrace(std::size_t entries_to_skip, const capture_stacktrace_cb callback) -> void {
     CONTEXT context;
     RtlCaptureContext(&context);
     increment_if_has_noinline(entries_to_skip);
-    capture_stacktrace_from_mutable_context(context, entries_to_skip, callback);
+    capture_stacktrace_impl(context, entries_to_skip, false, callback);
 }
 
 auto capture_stacktrace_from_context(const native_context_type &context,
                                      const std::size_t entries_to_skip,
                                      const capture_stacktrace_cb callback) -> void {
     auto context_copy = context;
-    capture_stacktrace_from_mutable_context(context_copy, entries_to_skip, callback);
+    capture_stacktrace_impl(context_copy, entries_to_skip, false, callback);
+}
+
+auto capture_stacktrace_from_mutable_context(native_context_type &context,
+                                             const std::size_t entries_to_skip,
+                                             const capture_stacktrace_cb callback) -> void {
+    capture_stacktrace_impl(context, entries_to_skip, false, callback);
+}
+
+auto capture_stacktrace_from_signal(const native_signal_parameters params,
+                                    const std::size_t entries_to_skip,
+                                    const capture_stacktrace_cb callback) -> void {
+    auto context_copy = *params->ContextRecord;
+    auto is_signal_frame = true;
+    if (params->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+        params->ExceptionRecord->NumberParameters >= 2 &&
+        params->ExceptionRecord->ExceptionInformation[1] == get_instruction_ptr(context_copy)) {
+        skip_leaf_function(context_copy);
+        is_signal_frame = false;
+    }
+    capture_stacktrace_impl(context_copy, entries_to_skip, is_signal_frame, callback);
 }
 
 } // namespace hindsight::detail
