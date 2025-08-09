@@ -56,10 +56,7 @@ static_assert(ptr_is_32bit || ptr_is_64bit);
         }                                                                                                              \
     }();                                                                                                               \
     HINDSIGHT_TESTS_STACKTRACE_ENTRY_STRING(name, value32, value64, string, )                                          \
-    HINDSIGHT_TESTS_STACKTRACE_ENTRY_STRING(name, value32, value64, wstring, L)                                        \
-    HINDSIGHT_TESTS_STACKTRACE_ENTRY_STRING(name, value32, value64, u8string, u8)                                      \
-    HINDSIGHT_TESTS_STACKTRACE_ENTRY_STRING(name, value32, value64, u16string, u)                                      \
-    HINDSIGHT_TESTS_STACKTRACE_ENTRY_STRING(name, value32, value64, u32string, U)
+    HINDSIGHT_TESTS_STACKTRACE_ENTRY_STRING(name, value32, value64, wstring, L)
 
 HINDSIGHT_TESTS_STACKTRACE_ENTRY_VALUE_AND_STRING(large, 0xabcdef01, 0xabcdef0123456789)
 HINDSIGHT_TESTS_STACKTRACE_ENTRY_VALUE_AND_STRING(small, 0x00001234, 0x0000123456789abc)

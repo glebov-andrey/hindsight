@@ -74,8 +74,6 @@ constexpr auto stacktrace_entry_fmt_string = [] {
     [[maybe_unused]] constexpr auto is_32bit = std::numeric_limits<native_handle_type>::digits == 32;
     [[maybe_unused]] constexpr auto is_64bit = std::numeric_limits<native_handle_type>::digits == 64;
     static_assert(is_32bit || is_64bit);
-    static_assert(std::same_as<Char, char> || std::same_as<Char, wchar_t> || std::same_as<Char, char8_t> ||
-                  std::same_as<Char, char16_t> || std::same_as<Char, char32_t>);
 
     using namespace std::string_view_literals;
 // One character per 4 bits + 2 characters for "0x":
@@ -89,12 +87,8 @@ constexpr auto stacktrace_entry_fmt_string = [] {
         HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL()
     } else if constexpr (std::same_as<Char, wchar_t>) {
         HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(L)
-    } else if constexpr (std::same_as<Char, char8_t>) {
-        HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(u8)
-    } else if constexpr (std::same_as<Char, char16_t>) {
-        HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(u)
-    } else if constexpr (std::same_as<Char, char32_t>) {
-        HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(U)
+    } else {
+        static_assert(false, "Unsupported character type");
     }
 #undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
 }();
