@@ -76,9 +76,9 @@ class HindsightConan(ConanFile):
 
     def build_requirements(self):
         if self.options.build_tests:
-            self.test_requires("catch2/[^3.7.1]")
+            self.test_requires("catch2/[^3.9.0]")
         if self.options.build_docs:
-            self.tool_requires("doxygen/[^1.12.0]")
+            self.tool_requires("doxygen/[^1.14.0]")
 
     def configure(self):
         if self.settings.os == "Windows" or self.options.shared:
