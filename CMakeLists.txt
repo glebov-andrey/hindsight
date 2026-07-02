@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.25)
 
 project(
     hindsight
@@ -84,6 +84,7 @@ if (BUILD_SHARED_LIBS)
         hindsight_obj
         PUBLIC HINDSIGHT_SHARED
         PRIVATE HINDSIGHT_SHARED_BUILD)
+    set_target_properties(hindsight_obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libbacktrace")
     target_compile_definitions(

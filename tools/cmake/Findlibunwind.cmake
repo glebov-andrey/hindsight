@@ -14,6 +14,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+include(FindPackageHandleStandardArgs)
+
+find_package(PkgConfig)
+if (PkgConfig_FOUND)
+    pkg_check_modules(libunwind-generic IMPORTED_TARGET GLOBAL libunwind-generic)
+    if (libunwind-generic_FOUND)
+        find_package_handle_standard_args(libunwind DEFAULT_MSG)
+        if (NOT TARGET libunwind::generic)
+            add_library(libunwind::generic ALIAS PkgConfig::libunwind-generic)
+        endif ()
+        return()
+    endif ()
+endif ()
+
 find_path(
     LIBUNWIND_INCLUDE_DIRECTORY
     NAMES libunwind.h
@@ -22,7 +36,6 @@ find_library(LIBUNWIND_GENERIC_LIBRARY unwind DOC "The libunwind library")
 
 mark_as_advanced(LIBUNWIND_INCLUDE_DIRECTORY LIBUNWIND_GENERIC_LIBRARY)
 
-include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(libunwind DEFAULT_MSG LIBUNWIND_INCLUDE_DIRECTORY LIBUNWIND_GENERIC_LIBRARY)
 
 if (libunwind_FOUND AND NOT TARGET libunwind::generic)
