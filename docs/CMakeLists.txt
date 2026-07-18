@@ -20,6 +20,12 @@ set(DOXYGEN_HEADERS ${HINDSIGHT_PUBLIC_HEADERS})
 list(TRANSFORM DOXYGEN_HEADERS PREPEND "include/")
 
 set(DOXYGEN_PREDEFINED HINDSIGHT_GENERATING_DOCUMENTATION)
-set(DOXYGEN_TAGFILES "docs/cppreference-doxygen-web.tag.xml=https://en.cppreference.com/w/")
+set(DOXYGEN_TAGFILES
+    "docs/cppreference-doxygen-web.tag.xml=https://en.cppreference.com/w/"
+)
 
-doxygen_add_docs(docs ${DOXYGEN_HEADERS} WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+doxygen_add_docs(
+    docs
+    ${DOXYGEN_HEADERS}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+)

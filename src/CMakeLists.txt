@@ -16,55 +16,62 @@
 
 target_sources(
     hindsight_obj
-    PRIVATE # cmake-format: sort
-            simple.cpp
-            stacktrace.cpp
-            stacktrace_entry.cpp
-            util/finally.cpp
-            util/finally.hpp
-            util/locked.cpp
-            util/locked.hpp)
+    PRIVATE
+        simple.cpp
+        stacktrace.cpp
+        stacktrace_entry.cpp
+        util/finally.cpp
+        util/finally.hpp
+        util/locked.cpp
+        util/locked.hpp
+)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_sources(
         hindsight_obj
-        PRIVATE # cmake-format: sort
-                capture_windows.cpp
-                resolver_windows.cpp
-                windows/bstr.cpp
-                windows/bstr.hpp
-                windows/com.cpp
-                windows/com.hpp
-                windows/encoding.cpp
-                windows/encoding.hpp
-                windows/module_map.cpp
-                windows/module_map.hpp)
-else ()
+        PRIVATE
+            capture_windows.cpp
+            resolver_windows.cpp
+            windows/bstr.cpp
+            windows/bstr.hpp
+            windows/com.cpp
+            windows/com.hpp
+            windows/encoding.cpp
+            windows/encoding.hpp
+            windows/module_map.cpp
+            windows/module_map.hpp
+    )
+else()
     target_sources(
         hindsight_obj
-        PRIVATE # cmake-format: sort
-                capture_unix.cpp
-                itanium_abi/demangle.cpp
-                itanium_abi/demangle.hpp
-                unix/encoding.cpp
-                unix/encoding.hpp)
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw")
+        PRIVATE
+            capture_unix.cpp
+            itanium_abi/demangle.cpp
+            itanium_abi/demangle.hpp
+            unix/encoding.cpp
+            unix/encoding.hpp
+    )
+    if(
+        CMAKE_SYSTEM_NAME STREQUAL "Linux"
+        AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw"
+    )
         target_sources(hindsight_obj PRIVATE resolver_libdw.cpp)
-    else ()
+    else()
         target_sources(hindsight_obj PRIVATE resolver_backtrace.cpp)
-    endif ()
-endif ()
+    endif()
+endif()
 
-if (HINDSIGHT_BUILD_TESTS)
+if(HINDSIGHT_BUILD_TESTS)
     target_sources(
         hindsight_tests
-        PRIVATE # cmake-format: sort
-                capture.test.cpp
-                capture_signal.test.cpp
-                resolver.test.cpp
-                stacktrace_entry.test.cpp
-                util/locked.test.cpp)
-    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        PRIVATE
+            capture.test.cpp
+            capture_signal.test.cpp
+            resolver.test.cpp
+            stacktrace_entry.test.cpp
+            util/locked.test.cpp
+    )
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_sources(hindsight_tests PRIVATE unix/encoding.test.cpp)
-    endif ()
-endif ()
+    endif()
+endif()

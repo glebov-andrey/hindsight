@@ -21,7 +21,8 @@ project(
     VERSION 0.1.0
     DESCRIPTION "A C++ stack trace library"
     HOMEPAGE_URL "https://github.com/glebov-andrey/hindsight"
-    LANGUAGES CXX)
+    LANGUAGES CXX
+)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -31,15 +32,20 @@ option(HINDSIGHT_BUILD_DOCS "Build documentation" OFF)
 option(HINDSIGHT_ENABLE_COVERAGE "Enable coverage" OFF)
 option(HINDSIGHT_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 option(HINDSIGHT_ENABLE_LLD_THINLTO_CACHE "Enable lld ThinLTO cache" OFF)
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(HINDSIGHT_RESOLVER_BACKEND
         "libdw"
-        CACHE STRING "The hindsight resolver backend")
+        CACHE STRING
+        "The hindsight resolver backend"
+    )
     set(LINUX_RESOLVER_BACKENDS "libdw;libbacktrace")
-    if (NOT HINDSIGHT_RESOLVER_BACKEND IN_LIST LINUX_RESOLVER_BACKENDS)
-        message(FATAL_ERROR "HINDSIGHT_RESOLVER_BACKEND, if set, must be either \"libdw\" or \"libbacktrace\"")
-    endif ()
-endif ()
+    if(NOT HINDSIGHT_RESOLVER_BACKEND IN_LIST LINUX_RESOLVER_BACKENDS)
+        message(
+            FATAL_ERROR
+            "HINDSIGHT_RESOLVER_BACKEND, if set, must be either \"libdw\" or \"libbacktrace\""
+        )
+    endif()
+endif()
 option(HINDSIGHT_CATCH2_FETCH_CONTENT "Use FetchContent to get Catch2" OFF)
 
 message(STATUS "hindsight: Build tests: ${HINDSIGHT_BUILD_TESTS}")
@@ -47,11 +53,17 @@ message(STATUS "hindsight: Build examples: ${HINDSIGHT_BUILD_EXAMPLES}")
 message(STATUS "hindsight: Build documentation: ${HINDSIGHT_BUILD_DOCS}")
 message(STATUS "hindsight: Enable coverage: ${HINDSIGHT_ENABLE_COVERAGE}")
 message(STATUS "hindsight: Enable clang-tidy: ${HINDSIGHT_ENABLE_CLANG_TIDY}")
-message(STATUS "hindsight: Enable lld ThinLTO cache: ${HINDSIGHT_ENABLE_LLD_THINLTO_CACHE}")
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+message(
+    STATUS
+    "hindsight: Enable lld ThinLTO cache: ${HINDSIGHT_ENABLE_LLD_THINLTO_CACHE}"
+)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(STATUS "hindsight: Resolver backend: ${HINDSIGHT_RESOLVER_BACKEND}")
-endif ()
-message(STATUS "hindsight: Use FetchContext to get Catch2: ${HINDSIGHT_CATCH2_FETCH_CONTENT}")
+endif()
+message(
+    STATUS
+    "hindsight: Use FetchContext to get Catch2: ${HINDSIGHT_CATCH2_FETCH_CONTENT}"
+)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
 
@@ -60,60 +72,73 @@ include(tools/cmake/coverage.cmake)
 include(tools/cmake/clang_tidy.cmake)
 
 find_package(Threads REQUIRED)
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(DIA REQUIRED)
-else ()
+else()
     find_package(libunwind REQUIRED)
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw")
+    if(
+        CMAKE_SYSTEM_NAME STREQUAL "Linux"
+        AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw"
+    )
         find_package(elfutils REQUIRED COMPONENTS libdw)
-    else ()
+    else()
         find_package(libbacktrace REQUIRED)
-    endif ()
+    endif()
     find_package(Iconv REQUIRED)
-endif ()
+endif()
 
 add_library(hindsight_obj OBJECT)
 target_include_directories(hindsight_obj PUBLIC include)
 target_compile_features(hindsight_obj PUBLIC cxx_std_20)
-target_link_libraries(hindsight_obj PRIVATE hindsight::default_options hindsight::coverage_options)
+target_link_libraries(
+    hindsight_obj
+    PRIVATE hindsight::default_options hindsight::coverage_options
+)
 target_link_libraries(hindsight_obj PUBLIC Threads::Threads)
 fix_compile_pdb_name(hindsight_obj hindsight)
 set_target_clang_tidy(hindsight_obj)
-if (BUILD_SHARED_LIBS)
+if(BUILD_SHARED_LIBS)
     target_compile_definitions(
         hindsight_obj
         PUBLIC HINDSIGHT_SHARED
-        PRIVATE HINDSIGHT_SHARED_BUILD)
+        PRIVATE HINDSIGHT_SHARED_BUILD
+    )
     set_target_properties(hindsight_obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif ()
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_libraries(hindsight_obj PRIVATE DIA::DIA)
-else ()
+else()
     target_link_libraries(hindsight_obj PRIVATE libunwind::generic)
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw")
+    if(
+        CMAKE_SYSTEM_NAME STREQUAL "Linux"
+        AND HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw"
+    )
         target_link_libraries(hindsight_obj PRIVATE elfutils::libdw)
-    else ()
-        target_link_libraries(hindsight_obj PRIVATE libbacktrace::libbacktrace ${CMAKE_DL_LIBS})
-    endif ()
+    else()
+        target_link_libraries(
+            hindsight_obj
+            PRIVATE libbacktrace::libbacktrace ${CMAKE_DL_LIBS}
+        )
+    endif()
     target_link_libraries(hindsight_obj PRIVATE Iconv::Iconv)
-endif ()
+endif()
 
 add_library(hindsight)
 target_link_libraries(hindsight PUBLIC hindsight_obj)
 add_library(hindsight::hindsight ALIAS hindsight)
 
-if (HINDSIGHT_BUILD_TESTS)
+if(HINDSIGHT_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif ()
+endif()
 
-if (HINDSIGHT_BUILD_EXAMPLES)
+if(HINDSIGHT_BUILD_EXAMPLES)
     add_subdirectory(examples)
-endif ()
+endif()
 
 add_subdirectory(include)
 add_subdirectory(src)
 
-if (HINDSIGHT_BUILD_DOCS)
+if(HINDSIGHT_BUILD_DOCS)
     add_subdirectory(docs)
-endif ()
+endif()

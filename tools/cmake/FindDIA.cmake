@@ -53,42 +53,55 @@ execute_process(
         "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer/vswhere.exe" #
         -latest -property installationPath -format value -utf8
     OUTPUT_VARIABLE VSWHERE_OUTPUT
-    ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+    ERROR_QUIET
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
 set(DIA_ROOT "${VSWHERE_OUTPUT}/DIA SDK")
 
 string(TOLOWER ${CMAKE_SYSTEM_PROCESSOR} CMAKE_SYSTEM_PROCESSOR_LOWER)
-if (CMAKE_SYSTEM_PROCESSOR_LOWER STREQUAL "amd64")
+if(CMAKE_SYSTEM_PROCESSOR_LOWER STREQUAL "amd64")
     set(DIA_ARCH_DIRECTORY "/amd64")
-elseif (CMAKE_SYSTEM_PROCESSOR_LOWER STREQUAL "arm64")
+elseif(CMAKE_SYSTEM_PROCESSOR_LOWER STREQUAL "arm64")
     set(DIA_ARCH_DIRECTORY "/arm64")
-elseif (CMAKE_SYSTEM_PROCESSOR_LOWER STREQUAL "arm")
+elseif(CMAKE_SYSTEM_PROCESSOR_LOWER STREQUAL "arm")
     set(DIA_ARCH_DIRECTORY "/arm")
-endif ()
+endif()
 
 find_path(
-    DIA_INCLUDE_DIR dia2.h
+    DIA_INCLUDE_DIR
+    dia2.h
     HINTS "${DIA_ROOT}/include"
-    DOC "DIA include directory")
+    DOC "DIA include directory"
+)
 
 find_library(
-    DIA_GUIDS_LIBRARY diaguids.lib
+    DIA_GUIDS_LIBRARY
+    diaguids.lib
     HINTS "${DIA_ROOT}/lib${DIA_ARCH_DIRECTORY}"
-    DOC "DIA GUIDs library")
+    DOC "DIA GUIDs library"
+)
 
 mark_as_advanced(DIA_INCLUDE_DIR DIA_GUIDS_LIBRARY)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(DIA DEFAULT_MSG DIA_INCLUDE_DIR DIA_GUIDS_LIBRARY)
+find_package_handle_standard_args(
+    DIA
+    DEFAULT_MSG
+    DIA_INCLUDE_DIR
+    DIA_GUIDS_LIBRARY
+)
 
-if (DIA_FOUND AND NOT TARGET DIA::DIA)
+if(DIA_FOUND AND NOT TARGET DIA::DIA)
     add_library(DIA::DIA STATIC IMPORTED)
     set_target_properties(
         DIA::DIA
-        PROPERTIES IMPORTED_LOCATION ${DIA_GUIDS_LIBRARY}
-                   INTERFACE_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR}
-                   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR})
-    if (NOT DIA_FIND_QUIETLY)
+        PROPERTIES
+            IMPORTED_LOCATION ${DIA_GUIDS_LIBRARY}
+            INTERFACE_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR}
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DIA_INCLUDE_DIR}
+    )
+    if(NOT DIA_FIND_QUIETLY)
         message(STATUS "Found DIA SDK: ${DIA_INCLUDE_DIR}")
-    endif ()
-endif ()
+    endif()
+endif()

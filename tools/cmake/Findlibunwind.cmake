@@ -17,35 +17,44 @@
 include(FindPackageHandleStandardArgs)
 
 find_package(PkgConfig)
-if (PkgConfig_FOUND)
-    pkg_check_modules(libunwind-generic IMPORTED_TARGET GLOBAL libunwind-generic)
-    if (libunwind-generic_FOUND)
+if(PkgConfig_FOUND)
+    pkg_check_modules(
+        libunwind-generic
+        IMPORTED_TARGET
+        GLOBAL
+        libunwind-generic
+    )
+    if(libunwind-generic_FOUND)
         find_package_handle_standard_args(libunwind DEFAULT_MSG)
-        if (NOT TARGET libunwind::generic)
+        if(NOT TARGET libunwind::generic)
             add_library(libunwind::generic ALIAS PkgConfig::libunwind-generic)
-        endif ()
+        endif()
         return()
-    endif ()
-endif ()
+    endif()
+endif()
 
-find_path(
-    LIBUNWIND_INCLUDE_DIRECTORY
-    NAMES libunwind.h
-    PATH_SUFFIXES libunwind)
+find_path(LIBUNWIND_INCLUDE_DIRECTORY NAMES libunwind.h PATH_SUFFIXES libunwind)
 find_library(LIBUNWIND_GENERIC_LIBRARY unwind DOC "The libunwind library")
 
 mark_as_advanced(LIBUNWIND_INCLUDE_DIRECTORY LIBUNWIND_GENERIC_LIBRARY)
 
-find_package_handle_standard_args(libunwind DEFAULT_MSG LIBUNWIND_INCLUDE_DIRECTORY LIBUNWIND_GENERIC_LIBRARY)
+find_package_handle_standard_args(
+    libunwind
+    DEFAULT_MSG
+    LIBUNWIND_INCLUDE_DIRECTORY
+    LIBUNWIND_GENERIC_LIBRARY
+)
 
-if (libunwind_FOUND AND NOT TARGET libunwind::generic)
+if(libunwind_FOUND AND NOT TARGET libunwind::generic)
     add_library(libunwind::generic UNKNOWN IMPORTED)
     set_target_properties(
         libunwind::generic
-        PROPERTIES IMPORTED_LOCATION ${LIBUNWIND_GENERIC_LIBRARY}
-                   INTERFACE_INCLUDE_DIRECTORIES ${LIBUNWIND_INCLUDE_DIRECTORY}
-                   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${LIBUNWIND_INCLUDE_DIRECTORY})
-    if (NOT libunwind_FIND_QUIETLY)
+        PROPERTIES
+            IMPORTED_LOCATION ${LIBUNWIND_GENERIC_LIBRARY}
+            INTERFACE_INCLUDE_DIRECTORIES ${LIBUNWIND_INCLUDE_DIRECTORY}
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${LIBUNWIND_INCLUDE_DIRECTORY}
+    )
+    if(NOT libunwind_FIND_QUIETLY)
         message(STATUS "Found libunwind: ${LIBUNWIND_GENERIC_LIBRARY}")
-    endif ()
-endif ()
+    endif()
+endif()

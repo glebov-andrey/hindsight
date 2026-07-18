@@ -52,54 +52,71 @@ The following cache variables may also be set:
 
 #]================================================================================================================]
 
-if (elfutils_FIND_REQUIRED_libdw)
+if(elfutils_FIND_REQUIRED_libdw)
     set(elfutils_FIND_REQUIRED_elfutils)
-endif ()
+endif()
 
 find_path(ELFUTILS_INCLUDE_DIRECTORY NAMES libelf.h)
-if (ELFUTILS_INCLUDE_DIRECTORY)
+if(ELFUTILS_INCLUDE_DIRECTORY)
     set(elfutils_elfutils_FOUND TRUE)
-endif ()
+endif()
 
-find_path(ELFUTILS_LIBDW_INCLUDE_DIRECTORY NAMES dwarf.h elfutils/libdw.h elfutils/libdwfl.h)
+find_path(
+    ELFUTILS_LIBDW_INCLUDE_DIRECTORY
+    NAMES dwarf.h elfutils/libdw.h elfutils/libdwfl.h
+)
 find_library(ELFUTILS_LIBDW_LIBRARY dw DOC "The libdw library")
-if (ELFUTILS_LIBDW_INCLUDE_DIRECTORY AND ELFUTILS_LIBDW_LIBRARY)
-    cmake_path(GET ELFUTILS_LIBDW_LIBRARY EXTENSION LAST_ONLY ELFUTILS_LIBDW_LIBRARY_EXT)
-    if (ELFUTILS_LIBDW_LIBRARY_EXT STREQUAL ".so")
+if(ELFUTILS_LIBDW_INCLUDE_DIRECTORY AND ELFUTILS_LIBDW_LIBRARY)
+    cmake_path(
+        GET ELFUTILS_LIBDW_LIBRARY
+        EXTENSION LAST_ONLY ELFUTILS_LIBDW_LIBRARY_EXT
+    )
+    if(ELFUTILS_LIBDW_LIBRARY_EXT STREQUAL ".so")
         set(elfutils_libdw_FOUND TRUE)
-    else ()
+    else()
         message(
-            WARNING "Found a static libdw library: ${ELFUTILS_LIBDW_LIBRARY}\n"
-                    "Findelfutils does not support linking libdw statically\n"
-                    "Note that doing so would require distributing the produced library under the (L)GPL 3.0 license!")
-    endif ()
-endif ()
+            WARNING
+            "Found a static libdw library: ${ELFUTILS_LIBDW_LIBRARY}\n"
+            "Findelfutils does not support linking libdw statically\n"
+            "Note that doing so would require distributing the produced library under the (L)GPL 3.0 license!"
+        )
+    endif()
+endif()
 
-mark_as_advanced(ELFUTILS_INCLUDE_DIRECTORY ELFUTILS_LIBDW_INCLUDE_DIRECTORY ELFUTILS_LIBDW_LIBRARY)
+mark_as_advanced(
+    ELFUTILS_INCLUDE_DIRECTORY
+    ELFUTILS_LIBDW_INCLUDE_DIRECTORY
+    ELFUTILS_LIBDW_LIBRARY
+)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(elfutils HANDLE_COMPONENTS)
 
-if (elfutils_elfutils_FOUND AND NOT TARGET elfutils::elfutils)
+if(elfutils_elfutils_FOUND AND NOT TARGET elfutils::elfutils)
     add_library(elfutils::elfutils INTERFACE IMPORTED)
     set_target_properties(
         elfutils::elfutils
-        PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ELFUTILS_INCLUDE_DIRECTORY}
-                   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${ELFUTILS_INCLUDE_DIRECTORY})
-    if (NOT elfutils_FIND_QUIETLY)
+        PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES ${ELFUTILS_INCLUDE_DIRECTORY}
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${ELFUTILS_INCLUDE_DIRECTORY}
+    )
+    if(NOT elfutils_FIND_QUIETLY)
         message(STATUS "Found elfutils: ${ELFUTILS_INCLUDE_DIRECTORY}")
-    endif ()
-endif ()
+    endif()
+endif()
 
-if (elfutils_libdw_FOUND AND NOT TARGET elfutils::libdw)
+if(elfutils_libdw_FOUND AND NOT TARGET elfutils::libdw)
     add_library(elfutils::libdw SHARED IMPORTED)
     target_link_libraries(elfutils::libdw INTERFACE elfutils::elfutils)
     set_target_properties(
         elfutils::libdw
-        PROPERTIES IMPORTED_LOCATION ${ELFUTILS_LIBDW_LIBRARY}
-                   INTERFACE_INCLUDE_DIRECTORIES ${ELFUTILS_LIBDW_INCLUDE_DIRECTORY}
-                   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${ELFUTILS_LIBDW_INCLUDE_DIRECTORY})
-    if (NOT elfutils_FIND_QUIETLY)
+        PROPERTIES
+            IMPORTED_LOCATION ${ELFUTILS_LIBDW_LIBRARY}
+            INTERFACE_INCLUDE_DIRECTORIES ${ELFUTILS_LIBDW_INCLUDE_DIRECTORY}
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+                ${ELFUTILS_LIBDW_INCLUDE_DIRECTORY}
+    )
+    if(NOT elfutils_FIND_QUIETLY)
         message(STATUS "Found libdw: ${ELFUTILS_LIBDW_LIBRARY}")
-    endif ()
-endif ()
+    endif()
+endif()

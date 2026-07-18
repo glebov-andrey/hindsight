@@ -15,12 +15,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 add_executable(hindsight_print_stacktrace_here)
-target_link_libraries(hindsight_print_stacktrace_here PRIVATE hindsight::default_options hindsight::hindsight)
+target_link_libraries(
+    hindsight_print_stacktrace_here
+    PRIVATE hindsight::default_options hindsight::hindsight
+)
 target_compile_features(hindsight_print_stacktrace_here PRIVATE cxx_std_23)
 set_target_clang_tidy(hindsight_print_stacktrace_here)
 
-target_sources(hindsight_print_stacktrace_here PRIVATE print_stacktrace_here.cpp)
+target_sources(
+    hindsight_print_stacktrace_here
+    PRIVATE print_stacktrace_here.cpp
+)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows" OR HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw")
+if(
+    CMAKE_SYSTEM_NAME STREQUAL "Windows"
+    OR HINDSIGHT_RESOLVER_BACKEND STREQUAL "libdw"
+)
     add_subdirectory(out_of_process)
-endif ()
+endif()

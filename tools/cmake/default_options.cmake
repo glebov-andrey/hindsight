@@ -20,38 +20,65 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
 
 add_library(hindsight_default_options INTERFACE)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_compile_definitions(hindsight_default_options INTERFACE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-endif ()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_compile_definitions(
+        hindsight_default_options
+        INTERFACE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
+    )
+endif()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(hindsight_default_options INTERFACE -W4 -wd4251)
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+elseif(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"
+)
     # -fno-show-column is a workaround for CLion not parsing the "file(line,column)" format
-    target_compile_options(hindsight_default_options INTERFACE -W4 -Wpedantic -clang:-fno-show-column)
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(hindsight_default_options INTERFACE -Wall -Wextra -Wpedantic)
-endif ()
+    target_compile_options(
+        hindsight_default_options
+        INTERFACE -W4 -Wpedantic -clang:-fno-show-column
+    )
+elseif(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+)
+    target_compile_options(
+        hindsight_default_options
+        INTERFACE -Wall -Wextra -Wpedantic
+    )
+endif()
 
-if (HINDSIGHT_ENABLE_LLD_THINLTO_CACHE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if(
+    HINDSIGHT_ENABLE_LLD_THINLTO_CACHE
+    AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+)
     set(THINLTO_CACHE_DIR "${CMAKE_BINARY_DIR}/thinlto-cache")
-    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-        target_link_options(hindsight_default_options INTERFACE -lldltocache:${THINLTO_CACHE_DIR})
-    else ()
-        target_link_options(hindsight_default_options INTERFACE -Wl,--thinlto-cache-dir=${THINLTO_CACHE_DIR})
-    endif ()
-endif ()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_link_options(
+            hindsight_default_options
+            INTERFACE -lldltocache:${THINLTO_CACHE_DIR}
+        )
+    else()
+        target_link_options(
+            hindsight_default_options
+            INTERFACE -Wl,--thinlto-cache-dir=${THINLTO_CACHE_DIR}
+        )
+    endif()
+endif()
 
 add_library(hindsight::default_options ALIAS hindsight_default_options)
 
-function (fix_compile_pdb_name TARGET_NAME PDB_NAME)
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+function(fix_compile_pdb_name TARGET_NAME PDB_NAME)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         get_target_property(TARGET_TYPE ${TARGET_NAME} TYPE)
-        if (TARGET_TYPE STREQUAL "STATIC_LIBRARY")
+        if(TARGET_TYPE STREQUAL "STATIC_LIBRARY")
             set_target_properties(
                 ${TARGET_NAME}
-                PROPERTIES COMPILE_PDB_NAME "${PDB_NAME}"
-                           COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
-        endif ()
-    endif ()
-endfunction ()
+                PROPERTIES
+                    COMPILE_PDB_NAME "${PDB_NAME}"
+                    COMPILE_PDB_OUTPUT_DIRECTORY
+                        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
+            )
+        endif()
+    endif()
+endfunction()

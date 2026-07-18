@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-if (HINDSIGHT_CATCH2_FETCH_CONTENT)
+if(HINDSIGHT_CATCH2_FETCH_CONTENT)
     include(FetchContent)
     FetchContent_Declare(
         Catch2
@@ -22,16 +22,19 @@ if (HINDSIGHT_CATCH2_FETCH_CONTENT)
         GIT_TAG fee81626d2a4811095c3a39d20fb355eeb954101 # v3.9.0
     )
     FetchContent_MakeAvailable(Catch2)
-else ()
+else()
     find_package(Catch2 REQUIRED)
-endif ()
+endif()
 
 add_executable(hindsight_tests)
-target_link_libraries(hindsight_tests PRIVATE hindsight::default_options hindsight::coverage_options hindsight_obj)
+target_link_libraries(
+    hindsight_tests
+    PRIVATE hindsight::default_options hindsight::coverage_options hindsight_obj
+)
 target_link_libraries(hindsight_tests PRIVATE Catch2::Catch2WithMain)
-if (BUILD_SHARED_LIBS)
+if(BUILD_SHARED_LIBS)
     target_compile_definitions(hindsight_tests PRIVATE HINDSIGHT_SHARED_BUILD)
-endif ()
+endif()
 
 include(Catch)
 catch_discover_tests(hindsight_tests)

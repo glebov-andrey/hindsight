@@ -15,13 +15,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 add_library(hindsight_coverage_options INTERFACE)
-if (HINDSIGHT_ENABLE_COVERAGE)
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        target_compile_options(hindsight_coverage_options INTERFACE -fprofile-instr-generate -fcoverage-mapping)
-        target_link_options(hindsight_coverage_options INTERFACE -fprofile-instr-generate -fcoverage-mapping)
-    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(HINDSIGHT_ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(
+            hindsight_coverage_options
+            INTERFACE -fprofile-instr-generate -fcoverage-mapping
+        )
+        target_link_options(
+            hindsight_coverage_options
+            INTERFACE -fprofile-instr-generate -fcoverage-mapping
+        )
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(hindsight_coverage_options INTERFACE --coverage)
         target_link_options(hindsight_coverage_options INTERFACE --coverage)
-    endif ()
-endif ()
+    endif()
+endif()
 add_library(hindsight::coverage_options ALIAS hindsight_coverage_options)
