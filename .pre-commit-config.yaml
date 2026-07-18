@@ -1,16 +1,14 @@
 repos:
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: '182152eb8c5ce1cf5299b956b04392c86bd8a126' # v20.1.8
+    rev: 'f4d7745e17a28aad7eed2f4874ca8d1568c11c4c' # v22.1.8
     hooks:
       - id: clang-format
         files: \.(h|hpp|c|cpp)$
-  - repo: https://github.com/cheshirekow/cmake-format-precommit
-    rev: 'e2c2116d86a80e72e7146a06e68b7c228afc6319' # v0.6.13
+  - repo: https://github.com/BlankSpruce/gersemi-pre-commit
+    rev: "e98930bdc210d3387007f9252d8c1694ea7e410f" # 0.27.7
     hooks:
-      - id: cmake-format
-        additional_dependencies:
-          - pyyaml
+      - id: gersemi
   - repo: https://github.com/psf/black
-    rev: '8a737e727ac5ab2f1d4cf5876720ed276dc8dc4b' # 25.1.0
+    rev: '87928e6d6761a4a6d22250e1fee5601b3998086e' # 26.5.1
     hooks:
       - id: black
