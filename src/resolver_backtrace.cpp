@@ -16,24 +16,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/detail/config.hpp>
+#include <hindsight/resolver.hpp>
 
-#if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
+#include <cerrno>
+#include <exception>
+#include <new>
+#include <optional>
+#include <string_view>
 
-    #include <hindsight/resolver.hpp>
+#include <dlfcn.h>
+#include <unistd.h> // close
 
-    #include <cerrno>
-    #include <exception>
-    #include <new>
-    #include <optional>
-    #include <string_view>
+#include <backtrace.h>
 
-    #include <dlfcn.h>
-
-    #include <backtrace.h>
-
-    #include "itanium_abi/demangle.hpp"
-    #include "unix/encoding.hpp"
+#include "itanium_abi/demangle.hpp"
+#include "unix/encoding.hpp"
 
 namespace hindsight {
 
@@ -59,67 +56,43 @@ namespace {
 }
 
 
-constexpr auto utf8_to_current_transcoder_getter = [] { return unix::get_utf8_to_current_transcoder(); };
-constexpr auto utf8_sanitizer_getter = [] { return unix::get_utf8_sanitizer(); };
-
-template<typename CharT>
-auto demangle_and_encode_symbol(const std::string &raw_symbol, const auto get_transcoder) -> std::basic_string<CharT> {
-    if (raw_symbol.empty()) {
+auto demangle_and_encode_symbol(const char *const raw_symbol) -> std::string {
+    if (raw_symbol == nullptr || std::char_traits<char>::length(raw_symbol) == 0) {
         return {};
     }
-    const auto demangled = itanium_abi::demangle(raw_symbol.c_str());
+    const auto demangled = itanium_abi::demangle(raw_symbol);
     const auto unencoded = demangled ? std::string_view{demangled.get()} : std::string_view{raw_symbol};
     if (unencoded.empty()) {
         return {};
     }
-    return unix::transcode(get_transcoder(), unencoded, std::in_place_type<CharT>);
+    return unix::transcode(unix::get_utf8_sanitizer(), unencoded);
 }
 
-template<typename CharT>
-auto encode_file_name(const std::string &raw_file_name, const auto get_transcoder) -> std::basic_string<CharT> {
-    if (raw_file_name.empty()) {
+auto encode_file_name(const char *const raw_file_name) -> std::string {
+    if (raw_file_name == nullptr) {
         return {};
     }
-    return unix::transcode(get_transcoder(), raw_file_name, std::in_place_type<CharT>);
+    const auto raw_file_name_sv = std::string_view{raw_file_name};
+    if (raw_file_name_sv.empty()) {
+        return {};
+    }
+    return unix::transcode(unix::get_utf8_sanitizer(), raw_file_name_sv);
 }
 
 } // namespace
 
-logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
-                                                   std::filesystem::path physical_module,
-                                                   std::string raw_symbol,
-                                                   std::string raw_file_name,
-                                                   const std::uint_least32_t line_number,
-                                                   const bool is_inline) noexcept
-        : m_physical{physical},
-          m_physical_module{std::move(physical_module)},
-          m_raw_symbol{std::move(raw_symbol)},
-          m_raw_file_name{std::move(raw_file_name)},
-          m_line_number{line_number},
-          m_is_inline{is_inline} {}
-
-auto logical_stacktrace_entry::symbol() const -> std::string {
-    return demangle_and_encode_symbol<char>(m_raw_symbol, utf8_to_current_transcoder_getter);
-}
-
-auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {
-    return demangle_and_encode_symbol<char8_t>(m_raw_symbol, utf8_sanitizer_getter);
-}
-
-auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name = encode_file_name<char>(m_raw_file_name, utf8_to_current_transcoder_getter),
-            .line_number = m_line_number,
-            .column_number = 0};
-}
-
-auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    return {.file_name = encode_file_name<char8_t>(m_raw_file_name, utf8_sanitizer_getter),
-            .line_number = m_line_number,
-            .column_number = 0};
-}
-
+class resolver::impl {};
 
 resolver::resolver() = default;
+
+#ifdef HINDSIGHT_OS_LINUX
+resolver::resolver(from_proc_maps_t /*from_proc_maps_tag*/, const int proc_maps_descriptor) {
+    ::close(proc_maps_descriptor); // close descriptor on error
+    throw std::runtime_error{"Resolving based on /proc/pid/maps is not supported by the libbacktrace backend"};
+}
+#endif
+
+resolver::~resolver() = default;
 
 auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callback) -> void {
     struct cb_state {
@@ -135,7 +108,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
         auto flush_buffered_entry(const bool is_inline) {
             if (buffered_entry && !done) {
                 if (is_inline) {
-                    buffered_entry->m_is_inline = true;
+                    buffered_entry->is_inline = true;
                 }
                 done = callback(std::move(*buffered_entry));
                 entry_issued = true;
@@ -150,7 +123,9 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
         state.physical_module = dl_info.dli_fname;
     }
 
-    const auto on_failure = [&] { callback(logical_stacktrace_entry{entry, std::move(state.physical_module)}); };
+    const auto on_failure = [&] {
+        callback(logical_stacktrace_entry{.physical = entry, .physical_module = std::move(state.physical_module)});
+    };
 
     auto *const global_state = get_backtrace_state();
     if (!global_state) {
@@ -171,13 +146,14 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
                     if (state.flush_buffered_entry(true)) {
                         return 0;
                     }
-                    state.buffered_entry = logical_stacktrace_entry{
-                            state.entry,
-                            state.physical_module,
-                            std::string{function ? std::string_view{function} : std::string_view{}},
-                            std::string{filename ? std::string_view{filename} : std::string_view{}},
-                            static_cast<std::uint_least32_t>(lineno),
-                            false};
+                    state.buffered_entry =
+                            logical_stacktrace_entry{.physical = state.entry,
+                                                     .physical_module = state.physical_module,
+                                                     .symbol = demangle_and_encode_symbol(function),
+                                                     .file_name = encode_file_name(filename),
+                                                     .line_number = static_cast<std::uint_least32_t>(lineno),
+                                                     .column_number = 0,
+                                                     .is_inline = false};
                     return 0;
                 } catch (...) {
                     state.exception = std::current_exception();
@@ -208,5 +184,3 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
 }
 
 } // namespace hindsight
-
-#endif

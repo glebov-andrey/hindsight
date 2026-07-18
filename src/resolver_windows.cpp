@@ -16,43 +16,41 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/detail/config.hpp>
+#include <hindsight/resolver.hpp>
 
-#if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_DIA
-    #include <hindsight/resolver.hpp>
+#include <cassert>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+#include <variant>
 
-    #include <cassert>
-    #include <tuple>
-    #include <unordered_map>
-    #include <utility>
-    #include <variant>
+#include <Windows.h>
+// Windows.h must be included before diacreate.h
+#include <dia2.h>
+#include <diacreate.h>
 
-    #include <Windows.h>
-    // Windows.h must be included before diacreate.h
-    #include <dia2.h>
-    #include <diacreate.h>
+#include "util/locked.hpp"
 
-    #include "util/locked.hpp"
-
-    #include "windows/com.hpp"
-    #include "windows/encoding.hpp"
-    #include "windows/module_map.hpp"
+#include "windows/bstr.hpp"
+#include "windows/com.hpp"
+#include "windows/encoding.hpp"
+#include "windows/module_map.hpp"
 
 namespace hindsight {
 
 namespace {
 
-[[nodiscard]] auto get_symbol_name(IDiaSymbol &symbol) -> detail::bstr {
-    auto symbol_name = detail::bstr{};
+[[nodiscard]] auto get_symbol_name(IDiaSymbol &symbol) -> std::string {
+    auto symbol_name = windows::bstr{};
     if (const auto result = symbol.get_name(symbol_name.out_ptr()); FAILED(result)) {
         return {};
     }
-    return symbol_name;
+    return windows::wide_to_utf8(symbol_name);
 }
 
 [[nodiscard]] auto
 get_source_location(IDiaSession &session, IDiaSymbol &symbol, const stacktrace_entry physical, const bool is_inline)
-        -> std::tuple<detail::bstr, std::uint_least32_t, std::uint_least32_t> {
+        -> std::tuple<std::string, std::uint_least32_t, std::uint_least32_t> {
     auto lines = windows::com_ptr<IDiaEnumLineNumbers>{};
     if (is_inline) {
         if (const auto result = session.findInlineeLinesByVA(&symbol, physical.native_handle(), 1, &lines);
@@ -76,7 +74,7 @@ get_source_location(IDiaSession &session, IDiaSymbol &symbol, const stacktrace_e
     if (const auto result = line->get_sourceFile(&source_file); FAILED(result) || !source_file) {
         return {};
     }
-    auto file_name = detail::bstr{};
+    auto file_name = windows::bstr{};
     if (const auto result = source_file->get_fileName(file_name.out_ptr()); FAILED(result)) {
         return {};
     }
@@ -84,42 +82,10 @@ get_source_location(IDiaSession &session, IDiaSymbol &symbol, const stacktrace_e
     line->get_lineNumber(&line_number);
     auto column_number = DWORD{};
     line->get_columnNumber(&column_number);
-    return {std::move(file_name), line_number, column_number};
+    return {windows::wide_to_utf8(file_name), line_number, column_number};
 }
 
 } // namespace
-
-logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
-                                                   std::filesystem::path physical_module,
-                                                   detail::bstr symbol,
-                                                   detail::bstr file_name,
-                                                   const std::uint_least32_t line_number,
-                                                   const std::uint_least32_t column_number,
-                                                   const bool is_inline) noexcept
-        : m_physical{physical},
-          m_physical_module{std::move(physical_module)},
-          m_symbol{std::move(symbol)},
-          m_file_name{std::move(file_name)},
-          m_line_number{line_number},
-          m_column_number{column_number},
-          m_is_inline{is_inline} {}
-
-auto logical_stacktrace_entry::symbol() const -> std::string { return windows::wide_to_narrow(m_symbol); }
-
-auto logical_stacktrace_entry::u8_symbol() const -> std::u8string { return windows::wide_to_utf8(m_symbol); }
-
-auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name = windows::wide_to_narrow(m_file_name),
-            .line_number = m_line_number,
-            .column_number = m_column_number};
-}
-
-auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    return {.file_name = windows::wide_to_utf8(m_file_name),
-            .line_number = m_line_number,
-            .column_number = m_column_number};
-}
-
 
 class resolver::impl {
 public:
@@ -131,11 +97,13 @@ public:
     auto resolve(const stacktrace_entry entry, const resolve_cb callback) -> void {
         auto module_info = std::visit([&](auto &module_map) { return module_map.lookup(entry); }, m_module_map);
         if (!module_info) {
-            callback(logical_stacktrace_entry{entry});
+            callback(logical_stacktrace_entry{.physical = entry});
             return;
         }
 
-        const auto on_failure = [&] { callback(logical_stacktrace_entry{entry, std::move(module_info->file_name)}); };
+        const auto on_failure = [&] {
+            callback(logical_stacktrace_entry{.physical = entry, .physical_module = std::move(module_info->file_name)});
+        };
 
         auto session = session_for_module(*module_info);
         if (!session) {
@@ -144,17 +112,18 @@ public:
         }
 
         const auto on_logical_entry = [&](IDiaSymbol &symbol, const bool is_inline) {
-            auto physical_module = is_inline ? std::filesystem::path{module_info->file_name}
-                                             : std::filesystem::path{std::move(module_info->file_name)};
+            auto physical_module = is_inline
+                                           ? std::filesystem::path{module_info->file_name}
+                                           : std::filesystem::path{std::move(module_info->file_name)}; // last one moves
             auto symbol_name = get_symbol_name(symbol);
             auto [file_name, line_number, column_number] = get_source_location(*session, symbol, entry, is_inline);
-            return callback(logical_stacktrace_entry{entry,
-                                                     std::move(physical_module),
-                                                     std::move(symbol_name),
-                                                     std::move(file_name),
-                                                     line_number,
-                                                     column_number,
-                                                     is_inline});
+            return callback(logical_stacktrace_entry{.physical = entry,
+                                                     .physical_module = std::move(physical_module),
+                                                     .symbol = std::move(symbol_name),
+                                                     .file_name = std::move(file_name),
+                                                     .line_number = line_number,
+                                                     .column_number = column_number,
+                                                     .is_inline = is_inline});
         };
 
         auto root_symbol = windows::com_ptr<IDiaSymbol>{};
@@ -259,5 +228,3 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
 }
 
 } // namespace hindsight
-
-#endif

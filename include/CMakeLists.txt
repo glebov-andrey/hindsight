@@ -16,7 +16,6 @@
 
 set(HINDSIGHT_PUBLIC_HEADERS
     # cmake-format: sort
-    hindsight/detail/bstr.hpp
     hindsight/detail/config.hpp
     hindsight/resolver.hpp
     hindsight/simple.hpp

@@ -16,17 +16,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/detail/bstr.hpp>
+#include "bstr.hpp"
 
-#ifdef HINDSIGHT_OS_WINDOWS
+#include <new>
 
-    #include <new>
+#include <Windows.h>
+// Windows.h needs to be included before oleauto.h
+#include <oleauto.h>
 
-    #include <Windows.h>
-    // Windows.h needs to be included before oleauto.h
-    #include <oleauto.h>
-
-namespace hindsight::detail {
+namespace hindsight::windows {
 
 bstr::bstr(const bstr &other)
         : m_ptr{other.m_ptr ? SysAllocStringLen(other.m_ptr, SysStringLen(other.m_ptr)) : nullptr} {
@@ -41,6 +39,4 @@ bstr::~bstr() {
     SysFreeString(m_ptr); // NOLINT(clang-analyzer-core.CallAndMessage)
 }
 
-} // namespace hindsight::detail
-
-#endif
+} // namespace hindsight::windows

@@ -28,6 +28,7 @@
 #include <iterator>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <Windows.h>
@@ -202,7 +203,7 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_
 
         throw;
     }
-    HINDSIGHT_UNREACHABLE;
+    std::unreachable();
 }
 
 } // namespace

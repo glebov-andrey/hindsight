@@ -18,36 +18,34 @@
 
 #include <hindsight/capture.hpp>
 
-#ifdef HINDSIGHT_OS_WINDOWS
-
-    #include <Windows.h>
+#include <Windows.h>
 
 namespace hindsight::detail {
 
 namespace {
 
 [[nodiscard]] auto get_instruction_ptr(const CONTEXT &context) noexcept {
-    #ifdef _M_IX86
+#ifdef _M_IX86
     return context.Eip;
-    #elif defined _M_AMD64
+#elif defined _M_AMD64
     return context.Rip;
-    #elif defined _M_ARM || defined _M_ARM64
+#elif defined _M_ARM || defined _M_ARM64
     return context.Pc;
-    #else
-        #error get_instruction_ptr is not implemented for this architecture
-    #endif
+#else
+    #error get_instruction_ptr is not implemented for this architecture
+#endif
 }
 
 auto skip_leaf_function(CONTEXT &context) noexcept {
-    #ifdef _M_AMD64
+#ifdef _M_AMD64
     // Making the load from `*Rsp` volatile because the memory it references doesn't really exist in the abstract
     // machine, and so the compiler can't reason about it.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, performance-no-int-to-ptr)
     context.Rip = *reinterpret_cast<const volatile std::uintptr_t *>(context.Rsp);
     context.Rsp += sizeof(std::uintptr_t);
-    #else
-        #error skip_leaf_function is not implemented for this architecture
-    #endif
+#else
+    #error skip_leaf_function is not implemented for this architecture
+#endif
 }
 
 auto capture_stacktrace_impl(native_context_type &context,
@@ -124,5 +122,3 @@ auto capture_stacktrace_from_signal(const native_signal_parameters params,
 }
 
 } // namespace hindsight::detail
-
-#endif

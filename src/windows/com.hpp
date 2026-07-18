@@ -19,16 +19,12 @@
 #ifndef HINDSIGHT_SRC_WINDOWS_COM_HPP
 #define HINDSIGHT_SRC_WINDOWS_COM_HPP
 
-#include <hindsight/detail/config.hpp>
+#include <cassert>
+#include <concepts>
+#include <cstddef>
+#include <utility>
 
-#ifdef HINDSIGHT_OS_WINDOWS
-
-    #include <cassert>
-    #include <concepts>
-    #include <cstddef>
-    #include <utility>
-
-    #include <Unknwn.h>
+#include <Unknwn.h>
 
 namespace hindsight::windows {
 
@@ -109,7 +105,5 @@ private:
 };
 
 } // namespace hindsight::windows
-
-#endif
 
 #endif // HINDSIGHT_SRC_WINDOWS_COM_HPP

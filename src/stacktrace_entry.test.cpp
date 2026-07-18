@@ -144,7 +144,7 @@ TEST_CASE("stacktrace_entry's std::formatter specialization adds zero-padding") 
     REQUIRE(std::format(L"{}", entry) == small_uintptr_wstring);
 }
 
-TEST_CASE("stacktrace_entry's std::formatter specialization throws for a non-empty format specification") {
+TEST_CASE("stacktrace_entry's std::formatter specialization throws for an invalid format specification") {
     constexpr auto entry = stacktrace_entry{from_native_handle, small_uintptr_value};
     REQUIRE_THROWS_AS(std::vformat("{:x}", std::make_format_args(entry)), std::format_error);
     REQUIRE_THROWS_AS(std::vformat(L"{:x}", std::make_wformat_args(entry)), std::format_error);

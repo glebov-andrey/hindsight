@@ -45,7 +45,7 @@ auto resolve_and_check(resolver &r, const stacktrace_entry physical) {
     auto resolved = std::vector<logical_stacktrace_entry>{};
     r.resolve(physical, std::back_inserter(resolved), std::unreachable_sentinel);
     REQUIRE(!resolved.empty());
-    REQUIRE(std::ranges::all_of(resolved, [&](const auto &entry) { return entry.physical() == physical; }));
+    REQUIRE(std::ranges::all_of(resolved, [&](const auto &entry) { return entry.physical == physical; }));
 }
 
 } // namespace

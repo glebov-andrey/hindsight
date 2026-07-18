@@ -92,12 +92,11 @@ auto run() -> int try {
         auto logical_entries = std::vector<logical_stacktrace_entry>{};
         host_resolver.resolve(entry, std::back_inserter(logical_entries), std::unreachable_sentinel);
         for (const auto &logical : logical_entries) {
-            auto source = logical.source();
             print_log("    {}{} ({}:{})\n"sv,
-                      logical.is_inline() ? "[inline] "sv : "         "sv,
-                      logical.symbol(),
-                      source.file_name,
-                      source.line_number);
+                      logical.is_inline ? "[inline] "sv : "         "sv,
+                      logical.symbol,
+                      logical.file_name,
+                      logical.line_number);
         }
     }
 

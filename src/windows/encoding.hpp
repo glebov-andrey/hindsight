@@ -19,21 +19,13 @@
 #ifndef HINDSIGHT_SRC_WINDOWS_ENCODING_HPP
 #define HINDSIGHT_SRC_WINDOWS_ENCODING_HPP
 
-#include <hindsight/detail/config.hpp>
-
-#ifdef HINDSIGHT_OS_WINDOWS
-
-    #include <string>
-    #include <string_view>
+#include <string>
+#include <string_view>
 
 namespace hindsight::windows {
 
-[[nodiscard]] auto wide_to_narrow(std::wstring_view wide) -> std::string;
-
-[[nodiscard]] auto wide_to_utf8(std::wstring_view wide) -> std::u8string;
+[[nodiscard]] auto wide_to_utf8(std::wstring_view wide) -> std::string;
 
 } // namespace hindsight::windows
-
-#endif
 
 #endif // HINDSIGHT_SRC_WINDOWS_ENCODING_HPP

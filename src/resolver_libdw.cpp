@@ -16,34 +16,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <hindsight/detail/config.hpp>
+#include <hindsight/resolver.hpp>
 
-#if HINDSIGHT_RESOLVER_BACKEND == HINDSIGHT_RESOLVER_BACKEND_LIBDW
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <shared_mutex>
+#include <stack>
+#include <string_view>
+#include <vector>
 
-    #include <hindsight/resolver.hpp>
+#include <stdio.h> // NOLINT(hicpp-deprecated-headers): fdopen is defined by POSIX in <stdio.h>
+#include <unistd.h>
 
-    #include <algorithm>
-    #include <cassert>
-    #include <cstddef>
-    #include <cstdio>
-    #include <limits>
-    #include <optional>
-    #include <shared_mutex>
-    #include <stack>
-    #include <string_view>
-    #include <vector>
+#include <dwarf.h>
+#include <elfutils/libdw.h>
+#include <elfutils/libdwfl.h>
 
-    #include <stdio.h> // NOLINT(hicpp-deprecated-headers): fdopen is defined by POSIX in <stdio.h>
-    #include <unistd.h>
+#include "util/locked.hpp"
 
-    #include <dwarf.h>
-    #include <elfutils/libdw.h>
-    #include <elfutils/libdwfl.h>
-
-    #include "util/locked.hpp"
-
-    #include "itanium_abi/demangle.hpp"
-    #include "unix/encoding.hpp"
+#include "itanium_abi/demangle.hpp"
+#include "unix/encoding.hpp"
 
 namespace hindsight {
 
@@ -265,70 +261,32 @@ using die_stack = std::stack<die_stack_entry, std::vector<die_stack_entry>>;
                                  .column_number = clamp_to_uint_least32(column_number)};
 }
 
-constexpr auto utf8_to_current_transcoder_getter = [] { return unix::get_utf8_to_current_transcoder(); };
-constexpr auto utf8_sanitizer_getter = [] { return unix::get_utf8_sanitizer(); };
-
-template<typename CharT>
-auto demangle_and_encode_symbol(const std::string &raw_symbol, const bool maybe_mangled, const auto get_transcoder)
-        -> std::basic_string<CharT> {
-    if (raw_symbol.empty()) {
+auto demangle_and_encode_symbol(const char *const raw_symbol, const bool maybe_mangled) -> std::string {
+    if (raw_symbol == nullptr) {
         return {};
     }
-    const auto demangled = maybe_mangled ? itanium_abi::demangle(raw_symbol.c_str()) : nullptr;
-    const auto unencoded = demangled ? std::string_view{demangled.get()} : std::string_view{raw_symbol};
+    const auto raw_symbol_sv = std::string_view{raw_symbol};
+    if (raw_symbol_sv.empty()) {
+        return {};
+    }
+    const auto demangled = maybe_mangled ? itanium_abi::demangle(raw_symbol) : nullptr;
+    const auto unencoded = demangled ? std::string_view{demangled.get()} : raw_symbol_sv;
     if (unencoded.empty()) {
         return {};
     }
-    return unix::transcode(get_transcoder(), unencoded, std::in_place_type<CharT>);
+    return unix::transcode(unix::get_utf8_sanitizer(), unencoded);
 }
 
-template<typename CharT>
-auto encode_file_name(const std::string &raw_file_name, const auto get_transcoder) -> std::basic_string<CharT> {
-    if (raw_file_name.empty()) {
+auto encode_file_name(const char *const raw_file_name) -> std::string {
+    assert(raw_file_name != nullptr);
+    const auto raw_file_name_sv = std::string_view{raw_file_name};
+    if (raw_file_name_sv.empty()) {
         return {};
     }
-    return unix::transcode(get_transcoder(), raw_file_name, std::in_place_type<CharT>);
+    return unix::transcode(unix::get_utf8_sanitizer(), raw_file_name_sv);
 }
 
 } // namespace
-
-
-logical_stacktrace_entry::logical_stacktrace_entry(const stacktrace_entry physical,
-                                                   std::filesystem::path physical_module,
-                                                   std::string raw_symbol,
-                                                   std::string raw_file_name,
-                                                   const std::uint_least32_t line_number,
-                                                   const std::uint_least32_t column_number,
-                                                   const bool maybe_mangled,
-                                                   const bool is_inline) noexcept
-        : m_physical{physical},
-          m_physical_module{std::move(physical_module)},
-          m_raw_symbol{std::move(raw_symbol)},
-          m_raw_file_name{std::move(raw_file_name)},
-          m_line_number{line_number},
-          m_column_number{column_number},
-          m_maybe_mangled{maybe_mangled},
-          m_is_inline{is_inline} {}
-
-auto logical_stacktrace_entry::symbol() const -> std::string {
-    return demangle_and_encode_symbol<char>(m_raw_symbol, m_maybe_mangled, utf8_to_current_transcoder_getter);
-}
-
-auto logical_stacktrace_entry::u8_symbol() const -> std::u8string {
-    return demangle_and_encode_symbol<char8_t>(m_raw_symbol, m_maybe_mangled, utf8_sanitizer_getter);
-}
-
-auto logical_stacktrace_entry::source() const -> source_location {
-    return {.file_name = encode_file_name<char>(m_raw_file_name, utf8_to_current_transcoder_getter),
-            .line_number = m_line_number,
-            .column_number = m_column_number};
-}
-
-auto logical_stacktrace_entry::u8_source() const -> u8_source_location {
-    return {.file_name = encode_file_name<char8_t>(m_raw_file_name, utf8_sanitizer_getter),
-            .line_number = m_line_number,
-            .column_number = m_column_number};
-}
 
 
 class resolver::impl {
@@ -508,15 +466,16 @@ private:
             if (is_function(die) && die_has_address(die, address_in_cu)) {
                 const auto is_inline = is_inline_function(die);
                 const auto [function_name, maybe_mangled] = func_name_search::search(die);
+                auto file_name = source_location ? encode_file_name(source_location->file_name) : std::string{};
                 if (cb_state.submit(logical_stacktrace_entry{
-                            cb_state.entry,
-                            is_inline ? cb_state.physical_module : std::move(cb_state.physical_module),
-                            function_name,
-                            source_location ? source_location->file_name : std::string{},
-                            source_location ? source_location->line_number : 0,
-                            source_location ? source_location->column_number : 0,
-                            maybe_mangled,
-                            is_inline})) {
+                            .physical = cb_state.entry,
+                            .physical_module =
+                                    is_inline ? cb_state.physical_module : std::move(cb_state.physical_module),
+                            .symbol = demangle_and_encode_symbol(function_name, maybe_mangled),
+                            .file_name = std::move(file_name),
+                            .line_number = source_location ? source_location->line_number : 0,
+                            .column_number = source_location ? source_location->column_number : 0,
+                            .is_inline = is_inline})) {
                     return;
                 }
                 if (!is_inline) {
@@ -539,14 +498,13 @@ private:
                                                              nullptr,
                                                              nullptr);
         if (symbol_name) {
-            cb_state.submit(logical_stacktrace_entry{cb_state.entry,
-                                                     std::move(cb_state.physical_module),
-                                                     symbol_name,
-                                                     {},
-                                                     0,
-                                                     0,
-                                                     true,
-                                                     false});
+            cb_state.submit(logical_stacktrace_entry{.physical = cb_state.entry,
+                                                     .physical_module = std::move(cb_state.physical_module),
+                                                     .symbol = demangle_and_encode_symbol(symbol_name, true),
+                                                     .file_name = {},
+                                                     .line_number = 0,
+                                                     .column_number = 0,
+                                                     .is_inline = false});
         } else {
             cb_state.on_failure();
         }
@@ -570,5 +528,3 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
 }
 
 } // namespace hindsight
-
-#endif

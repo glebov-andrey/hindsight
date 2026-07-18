@@ -19,19 +19,15 @@
 #ifndef HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 #define HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP
 
-#include <hindsight/detail/config.hpp>
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
 
-#ifdef HINDSIGHT_OS_WINDOWS
+#include <Windows.h>
 
-    #include <cassert>
-    #include <cstdint>
-    #include <memory>
-    #include <optional>
-    #include <string>
-
-    #include <Windows.h>
-
-    #include <hindsight/stacktrace_entry.hpp>
+#include <hindsight/stacktrace_entry.hpp>
 
 namespace hindsight::windows {
 
@@ -68,7 +64,5 @@ private:
 };
 
 } // namespace hindsight::windows
-
-#endif
 
 #endif // HINDSIGHT_SRC_WINDOWS_MODULE_MAP_HPP

@@ -18,13 +18,11 @@
 
 #include "encoding.hpp"
 
-#ifdef HINDSIGHT_OS_WINDOWS
+#include <cassert>
+#include <limits>
+#include <system_error>
 
-    #include <cassert>
-    #include <limits>
-    #include <system_error>
-
-    #include <Windows.h>
+#include <Windows.h>
 
 namespace hindsight::windows {
 
@@ -79,10 +77,6 @@ template<typename CharT>
 
 } // namespace
 
-auto wide_to_narrow(const std::wstring_view wide) -> std::string { return wide_to_multi_byte<char>(wide, CP_ACP); }
-
-auto wide_to_utf8(const std::wstring_view wide) -> std::u8string { return wide_to_multi_byte<char8_t>(wide, CP_UTF8); }
+auto wide_to_utf8(const std::wstring_view wide) -> std::string { return wide_to_multi_byte<char>(wide, CP_UTF8); }
 
 } // namespace hindsight::windows
-
-#endif

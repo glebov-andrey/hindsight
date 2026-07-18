@@ -18,20 +18,15 @@
 
 #include "encoding.hpp"
 
-#ifdef HINDSIGHT_OS_UNIX
+#include <algorithm>
+#include <cerrno>
+#include <cstddef>
+#include <iterator>
+#include <new>
+#include <sstream>
+#include <system_error>
 
-    #include <algorithm>
-    #include <cerrno>
-    #include <cstddef>
-    #include <iterator>
-    #include <new>
-    #include <sstream>
-    #include <system_error>
-
-    #include <langinfo.h>
-    #include <locale.h> // NOLINT(hicpp-deprecated-headers): newlocale is defined in <locale.h> by POSIX (not C++)
-
-    #include "../util/finally.hpp"
+#include "../util/finally.hpp"
 
 namespace hindsight::unix {
 
@@ -116,37 +111,13 @@ auto create_transcoder(const char *from, const char *to) -> unique_iconv {
 
 auto create_utf8_sanitizer() -> unique_iconv { return create_transcoder(utf8_encoding_name, utf8_encoding_name); }
 
-auto create_utf8_to_current_transcoder() -> unique_iconv {
-    // NOLINTNEXTLINE(readability-qualified-auto): locale_t is not necessarily a pointer
-    const auto locale = newlocale(LC_CTYPE_MASK, // NOLINT(hicpp-signed-bitwise): inside macro expansion
-                                  "", // NOLINTNEXTLINE(hicpp-use-nullptr): locale_t is not necessarily a pointer
-                                  static_cast<locale_t>(0));
-    const auto locale_guard = util::finally{[&]() noexcept { freelocale(locale); }};
-    const auto *const codeset = nl_langinfo_l(CODESET, locale);
-    auto conversion = unique_iconv{iconv_handle{iconv_open(codeset, utf8_encoding_name)}};
-    return create_transcoder(utf8_encoding_name, codeset);
-}
-
 auto get_utf8_sanitizer() -> iconv_t {
-    thread_local static const auto conversion = create_utf8_sanitizer();
+    thread_local const auto conversion = create_utf8_sanitizer();
     return conversion.get().get();
 }
 
-auto get_utf8_to_current_transcoder() -> iconv_t {
-    thread_local static const auto conversion = create_utf8_to_current_transcoder();
-    return conversion.get().get();
-}
-
-auto transcode(const iconv_t conversion, const std::string_view input, std::in_place_type_t<char> /* char_type */)
-        -> std::string {
+auto transcode(const iconv_t conversion, const std::string_view input) -> std::string {
     return iconv_transcode<char>(conversion, input);
 }
 
-auto transcode(const iconv_t conversion, const std::string_view input, std::in_place_type_t<char8_t> /* char_type */)
-        -> std::u8string {
-    return iconv_transcode<char8_t>(conversion, input);
-}
-
 } // namespace hindsight::unix
-
-#endif

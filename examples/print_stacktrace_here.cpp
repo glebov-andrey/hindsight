@@ -45,16 +45,15 @@ auto print_stacktrace_here() {
                      entry_idx,
                      entry,
                      logical_entries.empty() ? "<unknown module>"sv
-                                             : logical_entries.front().physical_module().filename().string());
+                                             : logical_entries.front().physical_module.filename().string());
         ++entry_idx;
         for (const auto &logical : logical_entries) {
-            auto source = logical.source();
             std::println("    {}{} ({}:{}:{})"sv,
-                         logical.is_inline() ? "[inline] "sv : "         "sv,
-                         logical.symbol(),
-                         source.file_name,
-                         source.line_number,
-                         source.column_number);
+                         logical.is_inline ? "[inline] "sv : "         "sv,
+                         logical.symbol,
+                         logical.file_name,
+                         logical.line_number,
+                         logical.column_number);
         }
     }
 }

@@ -79,16 +79,6 @@ inline constexpr auto _noinline_not_detected_warn = 0;
 [[maybe_unused]] inline constexpr auto _noinline_not_detected = _noinline_not_detected_warn;
 #endif
 
-#ifdef __has_builtin
-    #if __has_builtin(__builtin_unreachable)
-        #define HINDSIGHT_UNREACHABLE __builtin_unreachable()
-    #endif
-#elif defined _MSC_VER
-    #define HINDSIGHT_UNREACHABLE __assume(false)
-#else
-    #define HINDSIGHT_UNREACHABLE
-#endif
-
 
 #if defined _MSC_VER && !defined __clang__
     #define HINDSIGHT_PRAGMA_MSVC(str) _Pragma(str)
@@ -100,38 +90,6 @@ inline constexpr auto _noinline_not_detected_warn = 0;
     #define HINDSIGHT_PRAGMA_CLANG(str) _Pragma(str)
 #else
     #define HINDSIGHT_PRAGMA_CLANG(str)
-#endif
-
-
-#define HINDSIGHT_RESOLVER_BACKEND_DIA 1
-#define HINDSIGHT_RESOLVER_BACKEND_LIBDW 2
-#define HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE 3
-
-#ifdef HINDSIGHT_OS_WINDOWS
-    #if defined HINDSIGHT_RESOLVER_BACKEND
-        #if HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_DIA
-            #error HINDSIGHT_RESOLVER_BACKEND must be DIA on Windows
-        #endif
-    #else
-        #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_DIA
-    #endif
-#elif defined HINDSIGHT_OS_LINUX
-    #if defined HINDSIGHT_RESOLVER_BACKEND
-        #if HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_LIBDW &&                                          \
-                HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
-            #error HINDSIGHT_RESOLVER_BACKEND must be LIBDW or LIBBACKTRACE on Linux
-        #endif
-    #else
-        #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_LIBDW
-    #endif
-#else
-    #if defined HINDSIGHT_RESOLVER_BACKEND
-        #if HINDSIGHT_RESOLVER_BACKEND != HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
-            #error HINDSIGHT_RESOLVER_BACKEND must be LIBBACKTRACE on this OS
-        #endif
-    #else
-        #define HINDSIGHT_RESOLVER_BACKEND HINDSIGHT_RESOLVER_BACKEND_LIBBACKTRACE
-    #endif
 #endif
 
 } // namespace hindsight::detail

@@ -22,13 +22,12 @@
 #include <hindsight/detail/config.hpp>
 
 #include <compare>
-#include <concepts>
 #include <cstdint>
 #include <format>
 #include <iosfwd>
-#include <iterator>
 #include <limits>
 #include <string_view>
+#include <type_traits>
 
 namespace hindsight {
 
@@ -65,55 +64,43 @@ private:
     native_handle_type m_handle{};
 };
 
-namespace detail {
+} // namespace hindsight
 
-template<typename Char>
-constexpr auto stacktrace_entry_fmt_string = [] {
-    using native_handle_type = stacktrace_entry::native_handle_type;
-    static_assert(std::unsigned_integral<native_handle_type>);
-    [[maybe_unused]] constexpr auto is_32bit = std::numeric_limits<native_handle_type>::digits == 32;
-    [[maybe_unused]] constexpr auto is_64bit = std::numeric_limits<native_handle_type>::digits == 64;
-    static_assert(is_32bit || is_64bit);
+template<typename CharT>
+struct std::formatter<hindsight::stacktrace_entry, CharT> : std::formatter<std::basic_string_view<CharT>, CharT> {
+private:
+    static consteval auto native_entry_format_string() -> std::basic_string_view<CharT> {
+        using namespace std::string_view_literals;
+        using native_handle_type = hindsight::stacktrace_entry::native_handle_type;
+        constexpr auto is_32bit = std::numeric_limits<native_handle_type>::digits == 32;
+        constexpr auto is_64bit = std::numeric_limits<native_handle_type>::digits == 64;
 
-    using namespace std::string_view_literals;
 // One character per 4 bits + 2 characters for "0x":
-#define HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(prefix)                                                      \
+#define HINDSIGHT_NATIVE_ENTRY_FORMAT_STRING_PREFIXED(prefix)                                                          \
     if constexpr (is_32bit) {                                                                                          \
         return prefix##"{:#010x}"sv;                                                                                   \
     } else if constexpr (is_64bit) {                                                                                   \
         return prefix##"{:#018x}"sv;                                                                                   \
+    } else {                                                                                                           \
+        static_assert(false, "Unsupported native handle size");                                                        \
     }
-    if constexpr (std::same_as<Char, char>) {
-        HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL()
-    } else if constexpr (std::same_as<Char, wchar_t>) {
-        HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL(L)
-    } else {
-        static_assert(false, "Unsupported character type");
-    }
-#undef HINDSIGHT_DETAIL_STACKTRACE_ENTRY_FMT_STRING_IMPL
-}();
 
-[[noreturn]] HINDSIGHT_API auto throw_std_format_error() -> void;
-
-} // namespace detail
-
-} // namespace hindsight
-
-template<typename CharT>
-struct std::formatter<hindsight::stacktrace_entry, CharT> {
-    template<typename ParseCtx>
-    constexpr auto parse(ParseCtx &context) const -> ParseCtx::iterator {
-        auto it = context.begin(); // NOLINT(readability-qualified-auto): we only know that it's an iterator
-        if (it != context.end() && *it != CharT{'}'}) {
-            hindsight::detail::throw_std_format_error();
+        if constexpr (std::is_same_v<CharT, char>) {
+            HINDSIGHT_NATIVE_ENTRY_FORMAT_STRING_PREFIXED()
+        } else if constexpr (std::is_same_v<CharT, wchar_t>) {
+            HINDSIGHT_NATIVE_ENTRY_FORMAT_STRING_PREFIXED(L)
+        } else {
+            static_assert(false, "Unsupported character type");
         }
-        return it;
+
+#undef HINDSIGHT_NATIVE_ENTRY_FORMAT_STRING_PREFIXED
     }
 
+public:
     template<typename OutputIt>
     auto format(const hindsight::stacktrace_entry entry, basic_format_context<OutputIt, CharT> &context) const
             -> basic_format_context<OutputIt, CharT>::iterator {
-        return format_to(context.out(), hindsight::detail::stacktrace_entry_fmt_string<CharT>, entry.native_handle());
+        return std::format_to(context.out(), formatter::native_entry_format_string(), entry.native_handle());
     }
 };
 

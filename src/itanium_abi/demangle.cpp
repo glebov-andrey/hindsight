@@ -18,11 +18,9 @@
 
 #include "demangle.hpp"
 
-#ifndef HINDSIGHT_OS_WINDOWS
+#include <new>
 
-    #include <new>
-
-    #include <cxxabi.h>
+#include <cxxabi.h>
 
 namespace hindsight::itanium_abi {
 
@@ -43,5 +41,3 @@ auto demangle(const char *const mangled) -> unique_freeable<char[]> {
 }
 
 } // namespace hindsight::itanium_abi
-
-#endif

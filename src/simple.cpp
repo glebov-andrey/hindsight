@@ -26,6 +26,7 @@
 
 #include <hindsight/capture.hpp>
 #include <hindsight/resolver.hpp>
+#include <hindsight/stacktrace.hpp>
 
 namespace hindsight {
 
@@ -40,17 +41,16 @@ auto print_stacktrace(std::ostream &stream, const std::span<const stacktrace_ent
 
     using namespace std::string_view_literals;
     for (auto index = std::size_t{0}; const auto &logical_entry : logical_entries) {
-        stream << std::setw(3) << index << ": "sv << logical_entry.physical() << ':';
-        if (logical_entry.is_inline()) {
+        stream << std::setw(3) << index << ": "sv << logical_entry.physical << ':';
+        if (logical_entry.is_inline) {
             stream << " [inline]"sv;
         }
-        const auto symbol = logical_entry.symbol();
+        const auto symbol = logical_entry.symbol;
         if (!symbol.empty()) {
-            stream << ' ' << logical_entry.symbol();
+            stream << ' ' << logical_entry.symbol;
         }
-        const auto source = logical_entry.source();
-        if (!source.file_name.empty()) {
-            stream << " ("sv << source.file_name << ':' << source.line_number << ')';
+        if (!logical_entry.file_name.empty()) {
+            stream << " ("sv << logical_entry.file_name << ':' << logical_entry.line_number << ')';
         }
         stream << '\n';
         ++index;

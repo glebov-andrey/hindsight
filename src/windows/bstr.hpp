@@ -16,23 +16,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef HINDSIGHT_INCLUDE_HINDSIGHT_DETAIL_BSTR_HPP
-#define HINDSIGHT_INCLUDE_HINDSIGHT_DETAIL_BSTR_HPP
+#ifndef HINDSIGHT_SRC_WINDOWS_BSTR_HPP
+#define HINDSIGHT_SRC_WINDOWS_BSTR_HPP
 
-#include <hindsight/detail/config.hpp>
-
-#ifdef HINDSIGHT_OS_WINDOWS
-
-    #include <cstddef>
-    #include <cstdint>
-    #include <string_view>
-    #include <utility>
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include <utility>
 
 using BSTR = wchar_t *;
 
-namespace hindsight::detail {
+namespace hindsight::windows {
 
-class HINDSIGHT_API bstr {
+class bstr {
 public:
     bstr() noexcept = default;
 
@@ -78,8 +74,6 @@ private:
     BSTR m_ptr = nullptr;
 };
 
-} // namespace hindsight::detail
+} // namespace hindsight::windows
 
-#endif
-
-#endif // HINDSIGHT_INCLUDE_HINDSIGHT_DETAIL_BSTR_HPP
+#endif // HINDSIGHT_SRC_WINDOWS_BSTR_HPP

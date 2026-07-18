@@ -19,17 +19,13 @@
 #ifndef HINDSIGHT_SRC_UNIX_ENCODING_HPP
 #define HINDSIGHT_SRC_UNIX_ENCODING_HPP
 
-#include <hindsight/detail/config.hpp>
+#include <cassert>
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <string_view>
 
-#ifdef HINDSIGHT_OS_UNIX
-
-    #include <cassert>
-    #include <memory>
-    #include <string>
-    #include <string_view>
-    #include <utility>
-
-    #include <iconv.h>
+#include <iconv.h>
 
 namespace hindsight::unix {
 
@@ -68,18 +64,11 @@ using unique_iconv = std::unique_ptr<iconv_t, destroy_iconv>;
 
 [[nodiscard]] auto create_transcoder(const char *from, const char *to) -> unique_iconv;
 [[nodiscard]] auto create_utf8_sanitizer() -> unique_iconv;
-[[nodiscard]] auto create_utf8_to_current_transcoder() -> unique_iconv;
 
 [[nodiscard]] auto get_utf8_sanitizer() -> iconv_t;
-[[nodiscard]] auto get_utf8_to_current_transcoder() -> iconv_t;
 
-[[nodiscard]] auto transcode(iconv_t conversion, std::string_view input, std::in_place_type_t<char> char_type)
-        -> std::string;
-[[nodiscard]] auto transcode(iconv_t conversion, std::string_view input, std::in_place_type_t<char8_t> char_type)
-        -> std::u8string;
+[[nodiscard]] auto transcode(iconv_t conversion, std::string_view input) -> std::string;
 
 } // namespace hindsight::unix
-
-#endif
 
 #endif // HINDSIGHT_SRC_UNIX_ENCODING_HPP

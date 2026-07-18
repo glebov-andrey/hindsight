@@ -18,34 +18,32 @@
 
 #include <hindsight/capture.hpp>
 
-#ifndef HINDSIGHT_OS_WINDOWS
+#include <libunwind.h>
 
-    #include <libunwind.h>
-
-    // The "nongnu" libunwind implementation uses ucontext_t for unw_context_t directly on some architectures.
-    // unw_init_local2 is defined as a macro in the "nongnu" libunwind implementation.
-    #if defined unw_init_local2 && (defined __i386__ || defined __x86_64__ || defined __riscv)
-        #define HINDSIGHT_LIBUNWIND_USES_UCONTEXT
-    #endif
+// The "nongnu" libunwind implementation uses ucontext_t for unw_context_t directly on some architectures.
+// unw_init_local2 is defined as a macro in the "nongnu" libunwind implementation.
+#if defined unw_init_local2 && (defined __i386__ || defined __x86_64__ || defined __riscv)
+    #define HINDSIGHT_LIBUNWIND_USES_UCONTEXT
+#endif
 
 namespace hindsight::detail {
 
 namespace {
 
 [[nodiscard]] auto get_instruction_ptr(const mcontext_t &mcontext) noexcept -> unw_word_t {
-    #ifdef __i386__
+#ifdef __i386__
     const auto instruction_ptr = mcontext.gregs[REG_EIP];
-    #elif defined __x86_64__
+#elif defined __x86_64__
     const auto instruction_ptr = mcontext.gregs[REG_RIP];
-    #elif defined __aarch64__
+#elif defined __aarch64__
     const auto instruction_ptr = mcontext.pc;
-    #elif defined __arm__
+#elif defined __arm__
     const auto instruction_ptr = mcontext.arm_pc;
-    #elif defined __riscv
+#elif defined __riscv
     const auto instruction_ptr = mcontext.__gregs[REG_PC];
-    #else
-        #error get_instruction_ptr is not implemented for this architecture
-    #endif
+#else
+    #error get_instruction_ptr is not implemented for this architecture
+#endif
     return static_cast<unw_word_t>(instruction_ptr);
 }
 
@@ -56,42 +54,42 @@ namespace {
 }
 
 [[nodiscard]] auto skip_signal_frame(const mcontext_t &mcontext) noexcept -> unw_word_t {
-    #ifdef __i386__
+#ifdef __i386__
     return *reinterpret_cast<const volatile unw_word_t *>(mcontext.gregs[REG_ESP]);
-    #elif defined __x86_64__
+#elif defined __x86_64__
     return *reinterpret_cast<const volatile unw_word_t *>(mcontext.gregs[REG_RSP]);
+#else
+    #error skip_signal_frame is not implemented for this architecture
+#endif
+}
+
+#ifdef HINDSIGHT_LIBUNWIND_USES_UCONTEXT
+auto skip_signal_frame(ucontext_t &context) noexcept -> void {
+    #ifdef __i386__
+    auto &gregs = context.uc_mcontext.gregs;
+    gregs[REG_EIP] = static_cast<greg_t>(skip_signal_frame(context.uc_mcontext));
+    gregs[REG_ESP] += sizeof(greg_t);
+    #elif defined __x86_64__
+    auto &gregs = context.uc_mcontext.gregs;
+    gregs[REG_RIP] = static_cast<greg_t>(skip_signal_frame(context.uc_mcontext));
+    gregs[REG_RSP] += sizeof(greg_t);
     #else
         #error skip_signal_frame is not implemented for this architecture
     #endif
 }
+#endif
 
-    #ifdef HINDSIGHT_LIBUNWIND_USES_UCONTEXT
-auto skip_signal_frame(ucontext_t &context) noexcept -> void {
-        #ifdef __i386__
-    auto &gregs = context.uc_mcontext.gregs;
-    gregs[REG_EIP] = static_cast<greg_t>(skip_signal_frame(context.uc_mcontext));
-    gregs[REG_ESP] += sizeof(greg_t);
-        #elif defined __x86_64__
-    auto &gregs = context.uc_mcontext.gregs;
-    gregs[REG_RIP] = static_cast<greg_t>(skip_signal_frame(context.uc_mcontext));
-    gregs[REG_RSP] += sizeof(greg_t);
-        #else
-            #error skip_signal_frame is not implemented for this architecture
-        #endif
-}
-    #endif
-
-    #ifndef HINDSIGHT_LIBUNWIND_USES_UCONTEXT
+#ifndef HINDSIGHT_LIBUNWIND_USES_UCONTEXT
 [[nodiscard]] auto fill_cursor_from_mcontext(unw_cursor_t &cursor,
                                              const mcontext_t &mcontext,
                                              const bool should_skip) noexcept -> bool {
-        #define SET_REG_EXPLICIT(unw_reg, value)                                                                       \
-            if (unw_set_reg(&cursor, unw_reg, (value)) != 0) {                                                         \
-                return false;                                                                                          \
-            }
-        #ifdef __x86_64__
+    #define SET_REG_EXPLICIT(unw_reg, value)                                                                           \
+        if (unw_set_reg(&cursor, unw_reg, (value)) != 0) {                                                             \
+            return false;                                                                                              \
+        }
+    #ifdef __x86_64__
     const auto &gregs = mcontext.gregs;
-            #define SET_REG(reg) SET_REG_EXPLICIT(UNW_X86_64_##reg, static_cast<unw_word_t>(gregs[REG_##reg]))
+        #define SET_REG(reg) SET_REG_EXPLICIT(UNW_X86_64_##reg, static_cast<unw_word_t>(gregs[REG_##reg]))
     SET_REG(RAX)
     SET_REG(RDX)
     SET_REG(RCX)
@@ -116,14 +114,14 @@ auto skip_signal_frame(ucontext_t &context) noexcept -> void {
     SET_REG_EXPLICIT(UNW_REG_SP, rsp)
     // UNW_REG_IP is special in LLVM's libunwind and must be set using UNW_REG_IP, not UNW_X86_64_RIP
     SET_REG_EXPLICIT(UNW_REG_IP, rip)
-            #undef SET_REG
-        #else
-            #error fill_cursor_from_mcontext is not implemented for this architecture
-        #endif
-        #undef SET_REG_EXPLICIT
+        #undef SET_REG
+    #else
+        #error fill_cursor_from_mcontext is not implemented for this architecture
+    #endif
+    #undef SET_REG_EXPLICIT
     return true;
 }
-    #endif
+#endif
 
 auto capture_stacktrace_from_cursor(unw_cursor_t &cursor,
                                     std::size_t entries_to_skip,
@@ -165,7 +163,7 @@ auto capture_stacktrace(std::size_t entries_to_skip, const capture_stacktrace_cb
     capture_stacktrace_from_cursor(cursor, entries_to_skip, false, callback);
 }
 
-    #ifdef HINDSIGHT_LIBUNWIND_USES_UCONTEXT
+#ifdef HINDSIGHT_LIBUNWIND_USES_UCONTEXT
 
 auto capture_stacktrace_from_context(const native_context_type &context,
                                      const std::size_t entries_to_skip,
@@ -200,7 +198,7 @@ auto capture_stacktrace_from_signal(const native_signal_parameters params,
     capture_stacktrace_from_cursor(cursor, entries_to_skip, is_signal_frame, callback);
 }
 
-    #else
+#else
 
 auto capture_stacktrace_from_context(const native_context_type &context,
                                      const std::size_t entries_to_skip,
@@ -244,8 +242,6 @@ auto capture_stacktrace_from_signal(const native_signal_parameters params,
     capture_stacktrace_from_cursor(cursor, entries_to_skip, !should_skip, callback);
 }
 
-    #endif
+#endif
 
 } // namespace hindsight::detail
-
-#endif

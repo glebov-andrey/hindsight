@@ -111,9 +111,6 @@ class HindsightConan(ConanFile):
         self.cpp.build.defines = []
         if self.options.shared:
             self.cpp.build.defines.append("HINDSIGHT_SHARED")
-        if self.settings.os == "Linux" and self.options.resolver_backend != "libdw":
-            backend_macro = f"HINDSIGHT_RESOLVER_BACKEND_{str(self.options.resolver_backend).upper()}"
-            self.cpp.build.defines.append(f"HINDSIGHT_RESOLVER_BACKEND={backend_macro}")
 
         self.cpp.package.includedirs = ["include"]
         self.cpp.package.libdirs = ["lib"]
