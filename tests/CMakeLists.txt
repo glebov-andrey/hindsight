@@ -19,12 +19,13 @@ if(HINDSIGHT_CATCH2_FETCH_CONTENT)
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG fee81626d2a4811095c3a39d20fb355eeb954101 # v3.9.0
+        GIT_TAG 191fa38c9b1596cd2576ab531d4ab4d5e8e05190 # v3.15.2
+        SYSTEM
+        OVERRIDE_FIND_PACKAGE
     )
-    FetchContent_MakeAvailable(Catch2)
-else()
-    find_package(Catch2 REQUIRED)
 endif()
+
+find_package(Catch2 REQUIRED)
 
 add_executable(hindsight_tests)
 target_link_libraries(

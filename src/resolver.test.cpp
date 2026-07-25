@@ -28,6 +28,14 @@
 #include <hindsight/resolver.hpp>
 #include <hindsight/stacktrace.hpp>
 
+#include <hindsight/detail/config.hpp>
+
+#ifdef HINDSIGHT_OS_WINDOWS
+    #include <objbase.h>
+
+    #include "util/finally.hpp"
+#endif
+
 namespace hindsight {
 
 TEST_CASE("A resolver is default-constructible and immovable") {
@@ -56,5 +64,40 @@ TEST_CASE("A default-constructed resolver can be used") {
     auto r = resolver{};
     resolve_and_check(r, trace.front());
 }
+
+#ifdef HINDSIGHT_OS_WINDOWS
+
+// The resolver on Windows uses DIA SDK which has a COM-like API, and we use the API without initializing COM.
+// There is however some concern that NoRegCoCreate may initialize COM internally.
+// This test ensures that's not the case, and that we behave nicely in threads which themselves use COM.
+TEST_CASE("The Windows resolver implementation doesn't initialize COM") {
+    constexpr auto do_uninitialize_com = [] noexcept { CoUninitialize(); };
+    {
+        const auto pre_test_result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const auto com_init_guard = util::finally{do_uninitialize_com};
+        REQUIRE(pre_test_result != S_FALSE);
+        REQUIRE(pre_test_result != RPC_E_CHANGED_MODE);
+        REQUIRE(pre_test_result == S_OK);
+    }
+    auto r = resolver{};
+    {
+        const auto post_resolver_ctor_result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const auto com_init_guard = util::finally{do_uninitialize_com};
+        REQUIRE(post_resolver_ctor_result != S_FALSE);
+        REQUIRE(post_resolver_ctor_result != RPC_E_CHANGED_MODE);
+        REQUIRE(post_resolver_ctor_result == S_OK);
+    }
+    const auto trace = capture_stacktrace();
+    resolve_and_check(r, trace.front());
+    {
+        const auto post_resolver_resolve_result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const auto com_init_guard = util::finally{do_uninitialize_com};
+        REQUIRE(post_resolver_resolve_result != S_FALSE);
+        REQUIRE(post_resolver_resolve_result != RPC_E_CHANGED_MODE);
+        REQUIRE(post_resolver_resolve_result == S_OK);
+    }
+}
+
+#endif
 
 } // namespace hindsight
