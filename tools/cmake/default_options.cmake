@@ -33,7 +33,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(hindsight_default_options INTERFACE -W4 -wd4251)
 elseif(
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-    AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"
+    AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
 )
     # -fno-show-column is a workaround for CLion not parsing the "file(line,column)" format
     target_compile_options(
@@ -48,6 +48,18 @@ elseif(
         hindsight_default_options
         INTERFACE -Wall -Wextra -Wpedantic
     )
+endif()
+
+if(HINDSIGHT_ENABLE_DEBUG_INFO)
+    if(
+        CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"
+        OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
+    )
+        target_compile_options(hindsight_default_options INTERFACE -Z7)
+        target_link_options(hindsight_default_options INTERFACE -debug)
+    else()
+        target_compile_options(hindsight_default_options INTERFACE -g)
+    endif()
 endif()
 
 if(

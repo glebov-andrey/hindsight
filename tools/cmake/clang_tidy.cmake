@@ -27,7 +27,7 @@ if(HINDSIGHT_ENABLE_CLANG_TIDY)
     # directories. As a workaround we remove the trailing space which, oddly enough, works correctly.
     if(
         CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-        AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"
+        AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
     )
         set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-imsvc")
     endif()

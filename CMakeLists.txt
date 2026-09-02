@@ -39,6 +39,7 @@ option(
 option(HINDSIGHT_BUILD_TESTS "Build tests" ${PROJECT_IS_TOP_LEVEL})
 option(HINDSIGHT_BUILD_EXAMPLES "Build examples" OFF)
 option(HINDSIGHT_BUILD_DOCS "Build documentation" OFF)
+option(HINDSIGHT_ENABLE_DEBUG_INFO "Enable debug info in Release builds" OFF)
 option(HINDSIGHT_ENABLE_COVERAGE "Enable coverage" OFF)
 option(HINDSIGHT_ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 option(HINDSIGHT_ENABLE_LLD_THINLTO_CACHE "Enable lld ThinLTO cache" OFF)
