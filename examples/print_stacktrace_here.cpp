@@ -33,7 +33,7 @@ auto print_stacktrace_here() {
     using namespace std::string_view_literals;
 
     const auto entries = hindsight::capture_stacktrace();
-    std::println("Captured {} stacktrace entries"sv, entries.size());
+    std::println("Captured {} stacktrace entries", entries.size());
 
     auto resolver = hindsight::resolver{};
 
@@ -41,14 +41,14 @@ auto print_stacktrace_here() {
     for (const auto entry : entries) {
         auto logical_entries = std::vector<hindsight::logical_stacktrace_entry>{};
         resolver.resolve(entry, std::back_inserter(logical_entries), std::unreachable_sentinel);
-        std::println("{:02}: {} ({})"sv,
+        std::println("{:02}: {} ({})",
                      entry_idx,
                      entry,
                      logical_entries.empty() ? "<unknown module>"sv
                                              : logical_entries.front().physical_module.filename().string());
         ++entry_idx;
         for (const auto &logical : logical_entries) {
-            std::println("    {}{} ({}:{}:{})"sv,
+            std::println("    {}{} ({}:{}:{})",
                          logical.is_inline ? "[inline] "sv : "         "sv,
                          logical.symbol,
                          logical.file_name,

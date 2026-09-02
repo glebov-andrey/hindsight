@@ -20,6 +20,7 @@ if(HINDSIGHT_CATCH2_FETCH_CONTENT)
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
         GIT_TAG 191fa38c9b1596cd2576ab531d4ab4d5e8e05190 # v3.15.2
+        EXCLUDE_FROM_ALL
         SYSTEM
         OVERRIDE_FIND_PACKAGE
     )

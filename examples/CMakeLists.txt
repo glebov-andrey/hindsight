@@ -21,11 +21,24 @@ target_link_libraries(
 )
 target_compile_features(hindsight_print_stacktrace_here PRIVATE cxx_std_23)
 set_target_clang_tidy(hindsight_print_stacktrace_here)
-
 target_sources(
     hindsight_print_stacktrace_here
     PRIVATE print_stacktrace_here.cpp
 )
+
+if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+    add_executable(hindsight_from_exception_example)
+    target_link_libraries(
+        hindsight_from_exception_example
+        PRIVATE hindsight::default_options hindsight::hindsight
+    )
+    target_compile_features(hindsight_from_exception_example PRIVATE cxx_std_23)
+    set_target_clang_tidy(hindsight_from_exception_example)
+    target_sources(
+        hindsight_from_exception_example
+        PRIVATE from_exception_example.cpp
+    )
+endif()
 
 if(
     CMAKE_SYSTEM_NAME STREQUAL "Windows"

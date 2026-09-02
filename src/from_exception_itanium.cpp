@@ -176,6 +176,7 @@ __cxa_allocate_exception(const std::size_t thrown_size) noexcept {
     std::size_t stacktrace_capacity = 0;
     std::size_t stacktrace_size = 0;
     const auto reallocate_stacktrace = [&](const std::size_t new_capacity) noexcept {
+        assert(new_capacity > stacktrace_capacity && new_capacity <= max_stacktrace_capacity);
         const auto new_alloc_size = stacktrace_offset + sizeof(hindsight::stacktrace_entry) * new_capacity;
         void *const new_ptr = orig_allocate_exception(new_alloc_size);
         assert(new_ptr);
@@ -198,9 +199,10 @@ __cxa_allocate_exception(const std::size_t thrown_size) noexcept {
             if (stacktrace_capacity == max_stacktrace_capacity) {
                 return true;
             }
-            assert(stacktrace_capacity * 2 <= max_stacktrace_capacity);
             reallocate_stacktrace(stacktrace_capacity * 2);
         }
+        assert(allocated_ptr);
+        assert(stacktrace_size < stacktrace_capacity);
         auto *const stacktrace_ptr = reinterpret_cast<hindsight::stacktrace_entry *>(
                 static_cast<std::byte *>(allocated_ptr) + stacktrace_offset);
         stacktrace_ptr[stacktrace_size] = entry;
@@ -223,7 +225,7 @@ __cxa_allocate_exception(const std::size_t thrown_size) noexcept {
                     hindsight::g_exception_to_trace_map->try_emplace(allocated_ptr, dump_ptr).second;
             assert(inserted);
         } catch (...) {
-            assert(!"Failed to insert exception into trace map");
+            // Ignore errors
         }
     } else
 #endif
@@ -260,6 +262,7 @@ __cxa_decrement_exception_refcount(void *const thrown_object) noexcept { // NOLI
     // The following line has a race and could give false positives and false negatives.
     // In first case we remove the trace earlier, in the second case we get a memory leak.
     if (std::atomic_ref{exception_header->referenceCount}.load(std::memory_order::relaxed) == 1) {
+        // The only thing that can throw here is std::mutex - in which case std::terminate (via noexcept) is fine.
         const auto guard = std::lock_guard{hindsight::g_exception_to_trace_map_mutex};
         if (hindsight::g_exception_to_trace_map.has_value()) {
             hindsight::g_exception_to_trace_map->erase(thrown_object);
@@ -304,6 +307,7 @@ auto stacktrace_from_exception(const std::exception_ptr &ex) noexcept -> std::sp
     const void *dump_ptr = [&]() -> const void * {
 #if !HINDSIGHT_FROM_EXCEPTION_ALWAYS_STORE_IN_PADDING
         if (is_libcxx_runtime()) {
+            // The only thing that can throw here is std::mutex - in which case std::terminate (via noexcept) is fine.
             const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
             if (g_exception_to_trace_map.has_value()) {
                 if (const auto it = g_exception_to_trace_map->find(exc_raw_ptr);

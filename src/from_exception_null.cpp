@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Andrey Glebov
+ * Copyright 2026 Andrey Glebov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef HINDSIGHT_EXTRAS_EXCEPTIONS_HPP
-#define HINDSIGHT_EXTRAS_EXCEPTIONS_HPP
-
-#include <exception>
-#include <span>
-
-#include <hindsight/stacktrace_entry.hpp>
+#include <hindsight/from_exception.hpp>
 
 namespace hindsight {
 
-auto enable_stack_traces_from_exceptions() -> bool;
+auto enable_stacktrace_from_exceptions() -> bool { return false; }
 
-[[nodiscard]] auto stack_trace_from_current_exception() noexcept -> std::span<const stacktrace_entry>;
+auto disable_stacktrace_from_exceptions() -> void {}
 
-[[nodiscard]] auto stack_trace_from_exception(const std::exception_ptr &ex) noexcept
-        -> std::span<const stacktrace_entry>;
+auto stacktrace_from_current_exception() noexcept -> std::span<const stacktrace_entry> { return {}; }
+
+auto stacktrace_from_exception(const std::exception_ptr & /*ex*/) noexcept -> std::span<const stacktrace_entry> {
+    return {};
+}
 
 } // namespace hindsight
-
-#endif // HINDSIGHT_EXTRAS_EXCEPTIONS_HPP

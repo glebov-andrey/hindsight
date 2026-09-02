@@ -57,6 +57,13 @@ namespace hindsight::detail {
 #endif
 
 
+#ifdef __has_builtin
+    #define HINDSIGHT_HAS_BUILTIN(builtin) __has_builtin(builtin)
+#else
+    #define HINDSIGHT_HAS_BUILTIN(builtin) 0
+#endif
+
+
 #ifdef HINDSIGHT_NOINLINE
     #error HINDSIGHT_NOINLINE must not be defined
 #endif
@@ -77,6 +84,15 @@ namespace hindsight::detail {
 inline constexpr auto _noinline_not_detected_warn = 0;
 
 [[maybe_unused]] inline constexpr auto _noinline_not_detected = _noinline_not_detected_warn;
+#endif
+
+
+#if HINDSIGHT_HAS_BUILTIN(__builtin_unreachable)
+    #define HINDSIGHT_UNREACHABLE __builtin_unreachable()
+#elif defined _MSC_VER
+    #define HINDSIGHT_UNREACHABLE __assume(false)
+#else
+    #define HINDSIGHT_UNREACHABLE
 #endif
 
 

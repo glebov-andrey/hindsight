@@ -71,7 +71,7 @@ TEST_CASE("A default-constructed resolver can be used") {
 // There is however some concern that NoRegCoCreate may initialize COM internally.
 // This test ensures that's not the case, and that we behave nicely in threads which themselves use COM.
 TEST_CASE("The Windows resolver implementation doesn't initialize COM") {
-    constexpr auto do_uninitialize_com = [] noexcept { CoUninitialize(); };
+    constexpr auto do_uninitialize_com = []() noexcept { CoUninitialize(); };
     {
         const auto pre_test_result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         const auto com_init_guard = util::finally{do_uninitialize_com};

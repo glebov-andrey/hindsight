@@ -41,6 +41,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
             windows/module_map.cpp
             windows/module_map.hpp
     )
+    if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+        target_sources(hindsight_obj PRIVATE from_exception_windows.cpp)
+    endif()
 else()
     target_sources(
         hindsight_obj
@@ -50,7 +53,6 @@ else()
             itanium_abi/demangle.hpp
             unix/encoding.cpp
             unix/encoding.hpp
-            from_exception_itanium.cpp
     )
     if(
         CMAKE_SYSTEM_NAME STREQUAL "Linux"
@@ -60,6 +62,12 @@ else()
     else()
         target_sources(hindsight_obj PRIVATE resolver_backtrace.cpp)
     endif()
+    if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+        target_sources(hindsight_obj PRIVATE from_exception_itanium.cpp)
+    endif()
+endif()
+if(NOT HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+    target_sources(hindsight_obj PRIVATE from_exception_null.cpp)
 endif()
 
 if(HINDSIGHT_BUILD_TESTS)
@@ -68,12 +76,14 @@ if(HINDSIGHT_BUILD_TESTS)
         PRIVATE
             capture.test.cpp
             capture_signal.test.cpp
-            from_exception.test.cpp
             resolver.test.cpp
             stacktrace_entry.test.cpp
             util/locked.test.cpp
     )
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_sources(hindsight_tests PRIVATE unix/encoding.test.cpp)
+    endif()
+    if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+        target_sources(hindsight_tests PRIVATE from_exception.test.cpp)
     endif()
 endif()

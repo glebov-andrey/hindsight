@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.28)
 
 project(
     hindsight
@@ -31,6 +31,11 @@ if(NOT DEFINED CMAKE_CXX_EXTENSIONS)
     set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
+option(
+    HINDSIGHT_STACKTRACE_FROM_EXCEPTION
+    "Support getting stacktraces from exceptions"
+    ON
+)
 option(HINDSIGHT_BUILD_TESTS "Build tests" ${PROJECT_IS_TOP_LEVEL})
 option(HINDSIGHT_BUILD_EXAMPLES "Build examples" OFF)
 option(HINDSIGHT_BUILD_DOCS "Build documentation" OFF)
@@ -51,8 +56,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         )
     endif()
 endif()
-option(HINDSIGHT_CATCH2_FETCH_CONTENT "Use FetchContent to get Catch2" OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+    option(
+        HINDSIGHT_DETOURS_FETCH_CONTENT
+        "Use FetchContent to get detours"
+        OFF
+    )
+endif()
+if(HINDSIGHT_BUILD_TESTS)
+    option(HINDSIGHT_CATCH2_FETCH_CONTENT "Use FetchContent to get Catch2" OFF)
+endif()
 
+message(
+    STATUS
+    "hindsight: Support getting stacktraces from exceptions: ${HINDSIGHT_STACKTRACE_FROM_EXCEPTION}"
+)
 message(STATUS "hindsight: Build tests: ${HINDSIGHT_BUILD_TESTS}")
 message(STATUS "hindsight: Build examples: ${HINDSIGHT_BUILD_EXAMPLES}")
 message(STATUS "hindsight: Build documentation: ${HINDSIGHT_BUILD_DOCS}")
@@ -65,10 +83,18 @@ message(
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(STATUS "hindsight: Resolver backend: ${HINDSIGHT_RESOLVER_BACKEND}")
 endif()
-message(
-    STATUS
-    "hindsight: Use FetchContext to get Catch2: ${HINDSIGHT_CATCH2_FETCH_CONTENT}"
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+    message(
+        STATUS
+        "hindsight: Use FetchContext to get detours: ${HINDSIGHT_DETOURS_FETCH_CONTENT}"
+    )
+endif()
+if(HINDSIGHT_BUILD_TESTS)
+    message(
+        STATUS
+        "hindsight: Use FetchContext to get Catch2: ${HINDSIGHT_CATCH2_FETCH_CONTENT}"
+    )
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/cmake")
 
@@ -79,6 +105,13 @@ include(tools/cmake/clang_tidy.cmake)
 find_package(Threads REQUIRED)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(DIA REQUIRED)
+    if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+        find_package(vcruntime REQUIRED COMPONENTS src)
+        if(HINDSIGHT_DETOURS_FETCH_CONTENT)
+            include(tools/cmake/fetch_detours.cmake)
+        endif()
+        find_package(detours REQUIRED)
+    endif()
 else()
     find_package(libunwind REQUIRED)
     if(
@@ -112,6 +145,12 @@ if(BUILD_SHARED_LIBS)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_libraries(hindsight_obj PRIVATE DIA::DIA)
+    if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+        target_link_libraries(
+            hindsight_obj
+            PRIVATE vcruntime::src detours::detours
+        )
+    endif()
 else()
     target_link_libraries(hindsight_obj PRIVATE libunwind::generic)
     if(
@@ -126,6 +165,9 @@ else()
         )
     endif()
     target_link_libraries(hindsight_obj PRIVATE Iconv::Iconv)
+    if(HINDSIGHT_STACKTRACE_FROM_EXCEPTION)
+        target_link_libraries(hindsight_obj PRIVATE ${CMAKE_DL_LIBS})
+    endif()
 endif()
 
 add_library(hindsight)
