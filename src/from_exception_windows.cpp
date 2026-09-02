@@ -61,7 +61,10 @@ struct stacktrace_storage {
     std::size_t size = 0;
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wzero-length-array\"") // zero size arrays are an extension
+    HINDSIGHT_PRAGMA_MSVC("warning(push)")
+    HINDSIGHT_PRAGMA_MSVC("warning(disable: 4200)") // nonstandard extension used: zero-sized array in struct/union
     stacktrace_entry entries[0];
+    HINDSIGHT_PRAGMA_MSVC("warning(pop)")
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
 };
 
@@ -122,7 +125,7 @@ private:
     if (!ptr) {
         return nullptr;
     }
-    return stacktrace_storage_ptr{::new (ptr) stacktrace_storage{}};
+    return stacktrace_storage_ptr{::new (ptr) stacktrace_storage};
 }
 
 constinit std::mutex g_exception_to_trace_map_mutex{};
