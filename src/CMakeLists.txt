@@ -50,6 +50,7 @@ else()
             itanium_abi/demangle.hpp
             unix/encoding.cpp
             unix/encoding.hpp
+            from_exception_itanium.cpp
     )
     if(
         CMAKE_SYSTEM_NAME STREQUAL "Linux"
@@ -67,6 +68,7 @@ if(HINDSIGHT_BUILD_TESTS)
         PRIVATE
             capture.test.cpp
             capture_signal.test.cpp
+            from_exception.test.cpp
             resolver.test.cpp
             stacktrace_entry.test.cpp
             util/locked.test.cpp

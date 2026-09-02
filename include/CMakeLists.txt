@@ -16,6 +16,10 @@
 
 set(HINDSIGHT_PUBLIC_HEADERS
     hindsight/detail/config.hpp
+    hindsight/detail/function_ref.hpp
+    hindsight/capture.hpp
+    hindsight/from_exception.hpp
+    hindsight/logical_stacktrace_entry.hpp
     hindsight/resolver.hpp
     hindsight/simple.hpp
     hindsight/stacktrace.hpp
