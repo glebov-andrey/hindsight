@@ -50,6 +50,26 @@ namespace hindsight {
 
 namespace {
 
+namespace loophole {
+
+template<typename TagT, auto MemberT>
+struct steal {
+    friend consteval auto get(TagT) { return MemberT; }
+};
+
+template<typename UniqueT>
+struct member_tag {
+    friend consteval auto get(member_tag);
+};
+
+#define HINDSIGHT_ENABLE_ACCESS_MEMBER(Tag, Class, Member)                                                             \
+    using Tag = ::hindsight::loophole::member_tag<class Tag##_>;                                                       \
+    template struct ::hindsight::loophole::steal<Tag, &Class::Member>
+
+#define HINDSIGHT_ACCESS_MEMBER(Instance, Tag) ((Instance).*get(Tag{}))
+
+} // namespace loophole
+
 constinit std::atomic g_stacktrace_from_exceptions_enabled{false};
 
 [[nodiscard]] auto stacktrace_from_exceptions_enabled() noexcept -> bool {
@@ -278,6 +298,10 @@ void __cdecl detour_DestructExceptionObject(EHExceptionRecord *const pExcept, co
 
 using ex_ptr_impl = std::shared_ptr<const EXCEPTION_RECORD>;
 
+HINDSIGHT_ENABLE_ACCESS_MEMBER(ex_ptr_impl_rep_tag, std::_Ptr_base<const EXCEPTION_RECORD>, _Rep);
+HINDSIGHT_ENABLE_ACCESS_MEMBER(ref_count_base_uses_tag, std::_Ref_count_base, _Uses);
+HINDSIGHT_ENABLE_ACCESS_MEMBER(ref_count_base_destroy_tag, std::_Ref_count_base, _Destroy);
+
 [[nodiscard]] auto to_impl(void *const ex_ptr) noexcept -> ex_ptr_impl & { return *static_cast<ex_ptr_impl *>(ex_ptr); }
 
 [[nodiscard]] auto to_impl(const void *const ex_ptr) noexcept -> const ex_ptr_impl & {
@@ -295,17 +319,24 @@ using ex_ptr_impl = std::shared_ptr<const EXCEPTION_RECORD>;
 void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrDestroy(void *const ex_ptr) noexcept {
     assert(ex_ptr);
     const auto &ptr = to_impl(ex_ptr);
-    if (ptr.use_count() == 1) { // safe because we know there aren't any weak_ptr
-        const auto record = eh_record_from_base(*ptr);
-        { // The only thing that can throw here is std::mutex - in which case std::terminate (via noexcept) is fine.
-            const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
-            if (g_exception_to_trace_map.has_value()) {
-                g_exception_to_trace_map->erase(record.params.pExceptionObject);
+
+    // Reimplement ~shared_ptr(), but also clean up the stacktrace if we are the last to decrement the ref-count.
+    // Note that the stacktrace must be removed before we destroy the exception object because its pointer could
+    // immediately be reused by another exception in another thread.
+    if (auto *const rep = HINDSIGHT_ACCESS_MEMBER(ptr, ex_ptr_impl_rep_tag)) {
+        if (_MT_DECR(HINDSIGHT_ACCESS_MEMBER(*rep, ref_count_base_uses_tag)) == 0) {
+            const auto record = eh_record_from_base(*ptr);
+            { // The only thing that can throw here is std::mutex - in which case std::terminate (via noexcept) is fine.
+                const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+                if (g_exception_to_trace_map.has_value()) {
+                    g_exception_to_trace_map->erase(record.params.pExceptionObject);
+                }
             }
+
+            HINDSIGHT_ACCESS_MEMBER(*rep, ref_count_base_destroy_tag)();
+            rep->_Decwref();
         }
     }
-
-    original_ExceptionPtrDestroy(ex_ptr);
 }
 
 void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_ptr) noexcept {
