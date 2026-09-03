@@ -40,6 +40,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <unordered_map>
 #include <utility>
 
@@ -55,6 +56,8 @@
 #include <detours.h>
 
 #include <hindsight/capture.hpp>
+
+#include "util/finally.hpp"
 
 namespace hindsight {
 
@@ -206,7 +209,8 @@ private:
     return stacktrace;
 }
 
-constinit std::mutex g_exception_to_trace_map_mutex{};
+// std::shared_mutex is slimmer and faster than std::mutex in the MS standard library
+constinit std::shared_mutex g_exception_to_trace_map_mutex{};
 constinit std::optional<std::unordered_map<void *, stacktrace_storage_ptr>> g_exception_to_trace_map{};
 // TODO thread_local stack for exceptions' stacktraces before being captured by std::current_exception()
 
@@ -281,10 +285,29 @@ auto find_DestructExceptionObject() noexcept {
 }
 #endif
 
+// Must be checked before executing any custom code in detoured functions.
+// Must be set while executing any potentially throwing code (or anything which could potentially call into exception
+// handling machinery) in detoured functions.
+constinit thread_local bool suppress_detoured_functions = false;
+
+struct detour_suppression_guard {
+    explicit detour_suppression_guard() noexcept {
+        assert(!suppress_detoured_functions);
+        suppress_detoured_functions = true;
+    }
+    ~detour_suppression_guard() { suppress_detoured_functions = false; }
+};
+
 __declspec(noreturn) void __stdcall detour_CxxThrowException(void *const pExceptionObject,
                                                              _ThrowInfo *const pThrowInfo) {
-    if (stacktrace_from_exceptions_enabled()) {
+    if (!pExceptionObject || !pThrowInfo) {
+        original_CxxThrowException(pExceptionObject, pThrowInfo);
+        HINDSIGHT_UNREACHABLE;
+    }
+
+    if (stacktrace_from_exceptions_enabled() && !suppress_detoured_functions) {
         if (auto stacktrace = capture_stacktrace_here(1)) {
+            const auto detour_guard = detour_suppression_guard{};
             try {
                 const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
                 if (!g_exception_to_trace_map.has_value()) {
@@ -302,7 +325,7 @@ __declspec(noreturn) void __stdcall detour_CxxThrowException(void *const pExcept
     original_CxxThrowException(pExceptionObject, pThrowInfo);
 }
 
-template<decltype(__DestructExceptionObject) *&Original_DestructExceptionObject>
+template<decltype(__DestructExceptionObject) *&Original_DestructExceptionObject_Ptr>
 void __cdecl detour_DestructExceptionObject(EHExceptionRecord *const pExcept, const BOOLEAN fThrowNotAllowed) {
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wmultichar\"")
@@ -311,17 +334,20 @@ void __cdecl detour_DestructExceptionObject(EHExceptionRecord *const pExcept, co
     }
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic pop")
 
-    try {
-        const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
-        if (g_exception_to_trace_map.has_value()) {
-            g_exception_to_trace_map->erase(pExcept->params.pExceptionObject);
+    if (!suppress_detoured_functions) {
+        const auto detour_guard = detour_suppression_guard{};
+        try {
+            const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+            if (g_exception_to_trace_map.has_value()) {
+                g_exception_to_trace_map->erase(pExcept->params.pExceptionObject);
+            }
+        } catch (...) {
+            // The only thing that can throw here is std::mutex, in which case std::terminate is fine.
+            std::terminate();
         }
-    } catch (...) {
-        // The only thing that can throw here is std::mutex - in which case std::terminate is fine.
-        std::terminate();
     }
 
-    Original_DestructExceptionObject(pExcept, fThrowNotAllowed);
+    Original_DestructExceptionObject_Ptr(pExcept, fThrowNotAllowed);
 }
 
 using ex_ptr_impl = std::shared_ptr<const EXCEPTION_RECORD>;
@@ -353,8 +379,10 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrDestroy(void *const ex_ptr) noex
     // immediately be reused by another exception in another thread.
     if (auto *const rep = HINDSIGHT_ACCESS_MEMBER(ptr, ex_ptr_impl_rep_tag)) {
         if (_MT_DECR(HINDSIGHT_ACCESS_MEMBER(*rep, ref_count_base_uses_tag)) == 0) {
-            const auto record = eh_record_from_base(*ptr);
-            { // The only thing that can throw here is std::mutex - in which case std::terminate (via noexcept) is fine.
+            if (!suppress_detoured_functions) {
+                const auto detour_guard = detour_suppression_guard{};
+                const auto record = eh_record_from_base(*ptr);
+                // The only thing that can throw here is std::mutex, in which case std::terminate (via noexcept) is fine
                 const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
                 if (g_exception_to_trace_map.has_value()) {
                     g_exception_to_trace_map->erase(record.params.pExceptionObject);
@@ -389,51 +417,57 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_
         return;
     }
 
-    try {
-        const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
-        if (!g_exception_to_trace_map.has_value()) {
-            return;
+    if (!suppress_detoured_functions) {
+        const auto detour_guard = detour_suppression_guard{};
+        try {
+            const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+            if (!g_exception_to_trace_map.has_value()) {
+                return;
+            }
+            const auto *const original_record = _pCurrentException;
+            assert(original_record);
+            const auto original_entry = g_exception_to_trace_map->find(original_record->params.pExceptionObject);
+            if (original_entry == g_exception_to_trace_map->end()) {
+                return;
+            }
+            assert(original_entry->second);
+            const auto ptr_record = eh_record_from_base(*ptr);
+            assert(ptr_record.params.pExceptionObject);
+            [[maybe_unused]] const auto inserted =
+                    g_exception_to_trace_map->try_emplace(ptr_record.params.pExceptionObject, original_entry->second)
+                            .second;
+            assert(inserted);
+        } catch (...) {
+            // Ignore errors
         }
-        const auto *const original_record = _pCurrentException;
-        assert(original_record);
-        const auto original_entry = g_exception_to_trace_map->find(original_record->params.pExceptionObject);
-        if (original_entry == g_exception_to_trace_map->end()) {
-            return;
-        }
-        assert(original_entry->second);
-        const auto ptr_record = eh_record_from_base(*ptr);
-        assert(ptr_record.params.pExceptionObject);
-        [[maybe_unused]] const auto inserted =
-                g_exception_to_trace_map->try_emplace(ptr_record.params.pExceptionObject, original_entry->second)
-                        .second;
-        assert(inserted);
-    } catch (...) {
-        // Ignore errors
     }
 }
 
 [[noreturn]] void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrRethrow(const void *ex_ptr) {
     assert(ex_ptr);
     const auto &ptr = to_impl(ex_ptr);
-    if (!ptr) {
-        original_ExceptionPtrRethrow(ex_ptr); // Let the original handle the error (UB)
+    if (!ptr || suppress_detoured_functions) { // Let the original handle the error (UB)
+        original_ExceptionPtrRethrow(ex_ptr);
         HINDSIGHT_UNREACHABLE;
     }
 
     const auto original_record = eh_record_from_base(*ptr);
 
     auto stacktrace = stacktrace_storage_ptr{};
-    try {
-        const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
-        if (g_exception_to_trace_map.has_value()) {
-            const auto original_entry = g_exception_to_trace_map->find(original_record.params.pExceptionObject);
-            if (original_entry != g_exception_to_trace_map->end()) {
-                stacktrace = original_entry->second;
-                assert(stacktrace);
+    {
+        const auto detour_guard = detour_suppression_guard{};
+        try {
+            const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+            if (g_exception_to_trace_map.has_value()) {
+                const auto original_entry = g_exception_to_trace_map->find(original_record.params.pExceptionObject);
+                if (original_entry != g_exception_to_trace_map->end()) {
+                    stacktrace = original_entry->second;
+                    assert(stacktrace);
+                }
             }
+        } catch (...) {
+            // Propagating the exception here would break std::rethrow_exception's guarantees.
         }
-    } catch (...) {
-        // Propagating the exception here would break std::rethrow_exception's guarantees.
     }
 
     if (!stacktrace) { // avoid the added overhead of try/catch/throw
@@ -447,14 +481,18 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_
     } catch (...) {
         const auto *const rethrow_record = _pCurrentException;
         assert(rethrow_record);
-        try {
-            const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
-            assert(g_exception_to_trace_map.has_value());
-            [[maybe_unused]] const auto inserted =
-                    g_exception_to_trace_map->try_emplace(rethrow_record->params.pExceptionObject, stacktrace).second;
-            assert(inserted);
-        } catch (...) {
-            // Propagating the exception here would break std::rethrow_exception's guarantees.
+        {
+            const auto detour_guard = detour_suppression_guard{};
+            try {
+                const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+                assert(g_exception_to_trace_map.has_value());
+                [[maybe_unused]] const auto inserted =
+                        g_exception_to_trace_map->try_emplace(rethrow_record->params.pExceptionObject, stacktrace)
+                                .second;
+                assert(inserted);
+            } catch (...) {
+                // Propagating the exception here would break std::rethrow_exception's guarantees.
+            }
         }
         throw;
     }
@@ -467,12 +505,13 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCopyException(void *const ex_ptr
     original_ExceptionPtrCopyException(ex_ptr, PExceptRaw, PThrowRaw);
 
     auto &ptr = to_impl(ex_ptr);
-    if (!ptr) {
+    if (!ptr || suppress_detoured_functions) {
         return;
     }
 
     if (stacktrace_from_exceptions_enabled()) {
         if (auto stacktrace = capture_stacktrace_here(1)) {
+            const auto detour_guard = detour_suppression_guard{};
             const auto record = eh_record_from_base(*ptr);
             try {
                 const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
@@ -584,6 +623,7 @@ auto disable_stacktrace_from_exceptions() -> void {
 }
 
 auto stacktrace_from_current_exception() noexcept -> std::span<const stacktrace_entry> {
+    assert(!suppress_detoured_functions);
     const auto *const record = _pCurrentException;
     if (!record) {
         return {};
@@ -603,6 +643,7 @@ auto stacktrace_from_current_exception() noexcept -> std::span<const stacktrace_
 }
 
 auto stacktrace_from_exception(const std::exception_ptr &ex) noexcept -> std::span<const stacktrace_entry> {
+    assert(!suppress_detoured_functions);
     const auto &ptr = to_impl(&ex);
     if (!ptr) {
         return {};
@@ -623,6 +664,7 @@ auto stacktrace_from_exception(const std::exception_ptr &ex) noexcept -> std::sp
 }
 
 void check_for_exception_stacktrace_leaks() {
+    assert(!suppress_detoured_functions);
     const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
     if (g_exception_to_trace_map.has_value()) {
         if (!g_exception_to_trace_map->empty()) {

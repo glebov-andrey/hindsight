@@ -179,7 +179,7 @@ TEST_CASE("A stacktrace from an exception matches a stacktrace at the throw site
     check_for_exception_stacktrace_leaks();
 }
 
-TEST_CASE("A default-constructed std::exception_ptr doesn't have an assiciated stacktrace") {
+TEST_CASE("A default-constructed std::exception_ptr does not have an associated stacktrace") {
     {
         REQUIRE(enable_stacktrace_from_exceptions());
         const auto ex = std::exception_ptr{};
