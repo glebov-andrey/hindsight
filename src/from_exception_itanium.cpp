@@ -16,12 +16,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define HINDSIGHT_FROM_EXCEPTION_CHECK_FOR_LEAKS
+
 #include <hindsight/from_exception.hpp>
 
 #include <atomic>
 #include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <cxxabi.h>
@@ -328,6 +332,20 @@ auto stacktrace_from_exception(const std::exception_ptr &ex) noexcept -> std::sp
     const auto *const entries =
             reinterpret_cast<const stacktrace_entry *>(static_cast<const std::byte *>(dump_ptr) + first_entry_offset);
     return {entries, size};
+}
+
+auto check_for_exception_stacktrace_leaks() -> void {
+#if !HINDSIGHT_FROM_EXCEPTION_ALWAYS_STORE_IN_PADDING
+    const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+    if (g_exception_to_trace_map.has_value()) {
+        if (!g_exception_to_trace_map->empty()) {
+            std::fprintf(stderr,
+                         "hindsight: leaked %zu exception stacktrace entries\n",
+                         g_exception_to_trace_map->size());
+            std::abort();
+        }
+    }
+#endif
 }
 
 } // namespace hindsight

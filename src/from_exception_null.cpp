@@ -16,6 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define HINDSIGHT_FROM_EXCEPTION_CHECK_FOR_LEAKS
+
 #include <hindsight/from_exception.hpp>
 
 namespace hindsight {
@@ -29,5 +31,7 @@ auto stacktrace_from_current_exception() noexcept -> std::span<const stacktrace_
 auto stacktrace_from_exception(const std::exception_ptr & /*ex*/) noexcept -> std::span<const stacktrace_entry> {
     return {};
 }
+
+auto check_for_exception_stacktrace_leaks() -> void {}
 
 } // namespace hindsight

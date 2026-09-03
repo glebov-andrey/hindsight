@@ -36,6 +36,10 @@ HINDSIGHT_API auto disable_stacktrace_from_exceptions() -> void;
 [[nodiscard]] HINDSIGHT_API auto stacktrace_from_exception(const std::exception_ptr &ex) noexcept
         -> std::span<const stacktrace_entry>;
 
+#ifdef HINDSIGHT_FROM_EXCEPTION_CHECK_FOR_LEAKS
+auto check_for_exception_stacktrace_leaks() -> void;
+#endif
+
 } // namespace hindsight
 
 #endif // HINDSIGHT_INCLUDE_HINDSIGHT_FROM_EXCEPTION_HPP

@@ -20,11 +20,21 @@
 #ifdef __clang__
     #define _ThrowInfo ThrowInfo // NOLINT(*-reserved-identifier)
 #endif
+#if _DLL
+    // Force dllimport of __DestructExceptionObject. Without this, taking the address of the function yields an address
+    // within the current module instead of vcruntime140[d].dll.
+    #define _VCRTIMP __declspec(dllimport) // NOLINT(*-reserved-identifier)
+#endif
+
+#define HINDSIGHT_FROM_EXCEPTION_CHECK_FOR_LEAKS
 
 #include <hindsight/from_exception.hpp>
 
+#include <array>
 #include <atomic>
 #include <cassert>
+#include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -148,27 +158,81 @@ private:
     return stacktrace_storage_ptr{::new (ptr) stacktrace_storage};
 }
 
+[[nodiscard]] HINDSIGHT_NOINLINE stacktrace_storage_ptr capture_stacktrace_here(std::size_t entries_to_skip) noexcept {
+    detail::increment_if_has_noinline(entries_to_skip);
+
+    static constexpr std::size_t initial_stacktrace_capacity = 128;
+    static constexpr std::size_t max_stacktrace_capacity = 16384;
+    auto stacktrace = stacktrace_storage_ptr{};
+    std::size_t stacktrace_capacity = 0;
+    std::size_t stacktrace_size = 0;
+    const auto reallocate_stacktrace = [&](const std::size_t new_capacity) noexcept -> bool {
+        assert(new_capacity > stacktrace_capacity && new_capacity <= max_stacktrace_capacity);
+        auto new_storage = make_stacktrace_storage(new_capacity);
+        if (!new_storage) {
+            return false;
+        }
+        if (stacktrace_size != 0) {
+            assert(stacktrace);
+            std::memcpy(new_storage->entries, stacktrace->entries, stacktrace_size * sizeof(stacktrace_entry));
+        }
+        stacktrace = std::move(new_storage);
+        stacktrace_capacity = new_capacity;
+        return true;
+    };
+
+    reallocate_stacktrace(initial_stacktrace_capacity);
+    detail::capture_stacktrace(entries_to_skip, [&](const stacktrace_entry entry) -> bool {
+        if (stacktrace_size == stacktrace_capacity) {
+            if (stacktrace_capacity == max_stacktrace_capacity) {
+                return true;
+            }
+            if (!reallocate_stacktrace(stacktrace_capacity * 2)) {
+                return true;
+            }
+        }
+        assert(stacktrace);
+        assert(stacktrace_size < stacktrace_capacity);
+        stacktrace->entries[stacktrace_size] = entry;
+        stacktrace_size++;
+        return false;
+    });
+    if (stacktrace_size != 0) {
+        assert(stacktrace);
+        stacktrace->size = stacktrace_size;
+    } else {
+        assert(!stacktrace);
+    }
+    return stacktrace;
+}
+
 constinit std::mutex g_exception_to_trace_map_mutex{};
 constinit std::optional<std::unordered_map<void *, stacktrace_storage_ptr>> g_exception_to_trace_map{};
 // TODO thread_local stack for exceptions' stacktraces before being captured by std::current_exception()
 
 constinit decltype(_CxxThrowException) *original_CxxThrowException = nullptr;
 constinit decltype(__DestructExceptionObject) *original_DestructExceptionObject = nullptr;
+#if _DLL
+constinit decltype(__DestructExceptionObject) *original_DestructExceptionObject4 = nullptr;
+#endif
 
 constinit decltype(__ExceptionPtrDestroy) *original_ExceptionPtrDestroy = nullptr;
+constinit decltype(__ExceptionPtrAssign) *original_ExceptionPtrAssign = nullptr;
 constinit decltype(__ExceptionPtrCurrentException) *original_ExceptionPtrCurrentException = nullptr;
 constinit decltype(__ExceptionPtrRethrow) *original_ExceptionPtrRethrow = nullptr;
+constinit decltype(__ExceptionPtrCopyException) *original_ExceptionPtrCopyException = nullptr;
 
+#if _DLL
 [[nodiscard]] auto get_instruction_ptr(const CONTEXT &context) noexcept { // TODO Deduplicate function
-#ifdef _M_IX86
+    #ifdef _M_IX86
     return context.Eip;
-#elif defined _M_AMD64
+    #elif defined _M_AMD64
     return context.Rip;
-#elif defined _M_ARM || defined _M_ARM64
+    #elif defined _M_ARM || defined _M_ARM64
     return context.Pc;
-#else
-    #error get_instruction_ptr is not implemented for this architecture
-#endif
+    #else
+        #error get_instruction_ptr is not implemented for this architecture
+    #endif
 }
 
 auto find_DestructExceptionObject() noexcept {
@@ -178,12 +242,12 @@ auto find_DestructExceptionObject() noexcept {
         ~trace_on_destruct() {
             CONTEXT context;
             RtlCaptureContext(&context);
-#ifdef _DEBUG
-            constexpr auto back_trace_count = std::size_t{2};
-#else
-            constexpr auto back_trace_count = std::size_t{1};
-#endif
-            for (auto i = std::size_t{0}; i != back_trace_count; ++i) {
+    #ifdef _DEBUG
+            constexpr auto unwind_count = std::size_t{2};
+    #else
+            constexpr auto unwind_count = std::size_t{1};
+    #endif
+            for (auto i = std::size_t{0}; i != unwind_count; ++i) {
                 auto image_base = ULONG_PTR{};
                 auto *const function_entry = RtlLookupFunctionEntry(get_instruction_ptr(context), &image_base, nullptr);
                 assert(function_entry);
@@ -215,49 +279,12 @@ auto find_DestructExceptionObject() noexcept {
     assert(fn_addr != 0);
     return reinterpret_cast<decltype(__DestructExceptionObject) *>(fn_addr);
 }
+#endif
 
 __declspec(noreturn) void __stdcall detour_CxxThrowException(void *const pExceptionObject,
                                                              _ThrowInfo *const pThrowInfo) {
     if (stacktrace_from_exceptions_enabled()) {
-        static constexpr std::size_t initial_stacktrace_capacity = 128;
-        static constexpr std::size_t max_stacktrace_capacity = 16384;
-        auto stacktrace = stacktrace_storage_ptr{};
-        std::size_t stacktrace_capacity = 0;
-        std::size_t stacktrace_size = 0;
-        const auto reallocate_stacktrace = [&](const std::size_t new_capacity) noexcept -> bool {
-            assert(new_capacity > stacktrace_capacity && new_capacity <= max_stacktrace_capacity);
-            auto new_storage = make_stacktrace_storage(new_capacity);
-            if (!new_storage) {
-                return false;
-            }
-            if (stacktrace_size != 0) {
-                assert(stacktrace);
-                std::memcpy(new_storage->entries, stacktrace->entries, stacktrace_size * sizeof(stacktrace_entry));
-            }
-            stacktrace = std::move(new_storage);
-            stacktrace_capacity = new_capacity;
-            return true;
-        };
-
-        reallocate_stacktrace(initial_stacktrace_capacity);
-        detail::capture_stacktrace(1, [&](const stacktrace_entry entry) -> bool {
-            if (stacktrace_size == stacktrace_capacity) {
-                if (stacktrace_capacity == max_stacktrace_capacity) {
-                    return true;
-                }
-                if (!reallocate_stacktrace(stacktrace_capacity * 2)) {
-                    return true;
-                }
-            }
-            assert(stacktrace);
-            assert(stacktrace_size < stacktrace_capacity);
-            stacktrace->entries[stacktrace_size] = entry;
-            stacktrace_size++;
-            return false;
-        });
-        if (stacktrace_size != 0) {
-            assert(stacktrace);
-            stacktrace->size = stacktrace_size;
+        if (auto stacktrace = capture_stacktrace_here(1)) {
             try {
                 const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
                 if (!g_exception_to_trace_map.has_value()) {
@@ -275,6 +302,7 @@ __declspec(noreturn) void __stdcall detour_CxxThrowException(void *const pExcept
     original_CxxThrowException(pExceptionObject, pThrowInfo);
 }
 
+template<decltype(__DestructExceptionObject) *&Original_DestructExceptionObject>
 void __cdecl detour_DestructExceptionObject(EHExceptionRecord *const pExcept, const BOOLEAN fThrowNotAllowed) {
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic push")
     HINDSIGHT_PRAGMA_CLANG("clang diagnostic ignored \"-Wmultichar\"")
@@ -293,7 +321,7 @@ void __cdecl detour_DestructExceptionObject(EHExceptionRecord *const pExcept, co
         std::terminate();
     }
 
-    original_DestructExceptionObject(pExcept, fThrowNotAllowed);
+    Original_DestructExceptionObject(pExcept, fThrowNotAllowed);
 }
 
 using ex_ptr_impl = std::shared_ptr<const EXCEPTION_RECORD>;
@@ -337,6 +365,20 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrDestroy(void *const ex_ptr) noex
             rep->_Decwref();
         }
     }
+}
+
+void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrAssign(void *const dest, const void *const src) noexcept {
+    assert(dest);
+    assert(src);
+    auto &dest_ptr = to_impl(dest);
+    const auto &src_ptr = to_impl(src);
+
+    alignas(ex_ptr_impl) std::array<std::byte, sizeof(ex_ptr_impl)> temp_storage;
+    auto &temp = *::new (static_cast<void *>(temp_storage.data())) ex_ptr_impl(src_ptr);
+
+    dest_ptr.swap(temp);
+
+    detour_ExceptionPtrDestroy(&temp);
 }
 
 void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_ptr) noexcept {
@@ -418,6 +460,36 @@ void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCurrentException(void *const ex_
     }
 }
 
+void __CLRCALL_PURE_OR_CDECL detour_ExceptionPtrCopyException(void *const ex_ptr,
+                                                              const void *const PExceptRaw,
+                                                              const void *const PThrowRaw) noexcept {
+    assert(ex_ptr);
+    original_ExceptionPtrCopyException(ex_ptr, PExceptRaw, PThrowRaw);
+
+    auto &ptr = to_impl(ex_ptr);
+    if (!ptr) {
+        return;
+    }
+
+    if (stacktrace_from_exceptions_enabled()) {
+        if (auto stacktrace = capture_stacktrace_here(1)) {
+            const auto record = eh_record_from_base(*ptr);
+            try {
+                const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+                if (!g_exception_to_trace_map.has_value()) {
+                    g_exception_to_trace_map.emplace();
+                }
+                [[maybe_unused]] const auto inserted =
+                        g_exception_to_trace_map->try_emplace(record.params.pExceptionObject, std::move(stacktrace))
+                                .second;
+                assert(inserted);
+            } catch (...) {
+                // Ignore errors
+            }
+        }
+    }
+}
+
 } // namespace
 
 auto enable_stacktrace_from_exceptions() -> bool {
@@ -430,10 +502,30 @@ auto enable_stacktrace_from_exceptions() -> bool {
     }
 
     original_CxxThrowException = _CxxThrowException;
-    original_DestructExceptionObject = find_DestructExceptionObject();
+
+    // When using a dynamic runtime, the linked version of __DestructExceptionObject is defined in vcruntime140[d].dll,
+    // and it gets called from __CxxFrameHandler3 based unwinding code.
+    original_DestructExceptionObject = __DestructExceptionObject;
+#if _DLL
+    // __CxxFrameHandler4 based unwinding code (currently only produced by MSVC) gets called from vcruntime140_1[d].dll,
+    // but there is no exported __DestructExceptionObject symbol, so we detect it dynamically by throwing an exception
+    // and unwinding a fixed number of frames.
+    auto *const runtime_DestructExceptionObject = find_DestructExceptionObject();
+    // If this code was built by Clang (or by MSVC with FH4 disabled) then the runtime-detected function should match
+    // the linked function. In order for this comparison to work, __DestructExceptionObject must point into
+    // vcruntime140[d].dll. By default _VCRTIMP is empty, which results in __DestructExceptionObject pointing into the
+    // current module instead. By defining _VCRTIMP as __declspec(dllimport) we force the compiler to resolve the
+    // address to the imported DLL (checked with both MSVC and Clang).
+    if (runtime_DestructExceptionObject != __DestructExceptionObject) {
+        original_DestructExceptionObject4 = runtime_DestructExceptionObject;
+    }
+#endif
+
     original_ExceptionPtrDestroy = __ExceptionPtrDestroy;
+    original_ExceptionPtrAssign = __ExceptionPtrAssign;
     original_ExceptionPtrCurrentException = __ExceptionPtrCurrentException;
     original_ExceptionPtrRethrow = __ExceptionPtrRethrow;
+    original_ExceptionPtrCopyException = __ExceptionPtrCopyException;
 
     if (DetourTransactionBegin() != NO_ERROR) {
         return false;
@@ -446,11 +538,25 @@ auto enable_stacktrace_from_exceptions() -> bool {
         DetourTransactionAbort();
         return false;
     }
-    if (DetourAttach(&original_DestructExceptionObject, detour_DestructExceptionObject) != NO_ERROR) {
+    if (DetourAttach(&original_DestructExceptionObject,
+                     detour_DestructExceptionObject<original_DestructExceptionObject>) != NO_ERROR) {
         DetourTransactionAbort();
         return false;
     }
+#if _DLL
+    if (original_DestructExceptionObject4 != nullptr) {
+        if (DetourAttach(&original_DestructExceptionObject4,
+                         detour_DestructExceptionObject<original_DestructExceptionObject4>) != NO_ERROR) {
+            DetourTransactionAbort();
+            return false;
+        }
+    }
+#endif
     if (DetourAttach(&original_ExceptionPtrDestroy, detour_ExceptionPtrDestroy) != NO_ERROR) {
+        DetourTransactionAbort();
+        return false;
+    }
+    if (DetourAttach(&original_ExceptionPtrAssign, detour_ExceptionPtrAssign) != NO_ERROR) {
         DetourTransactionAbort();
         return false;
     }
@@ -459,6 +565,10 @@ auto enable_stacktrace_from_exceptions() -> bool {
         return false;
     }
     if (DetourAttach(&original_ExceptionPtrRethrow, detour_ExceptionPtrRethrow) != NO_ERROR) {
+        DetourTransactionAbort();
+        return false;
+    }
+    if (DetourAttach(&original_ExceptionPtrCopyException, detour_ExceptionPtrCopyException) != NO_ERROR) {
         DetourTransactionAbort();
         return false;
     }
@@ -510,6 +620,16 @@ auto stacktrace_from_exception(const std::exception_ptr &ex) noexcept -> std::sp
         }
     }
     return {};
+}
+
+void check_for_exception_stacktrace_leaks() {
+    const auto guard = std::lock_guard{g_exception_to_trace_map_mutex};
+    if (g_exception_to_trace_map.has_value()) {
+        if (!g_exception_to_trace_map->empty()) {
+            std::fprintf(stderr, "hindsight: leaked %zu exception stacktraces\n", g_exception_to_trace_map->size());
+            std::abort();
+        }
+    }
 }
 
 } // namespace hindsight
