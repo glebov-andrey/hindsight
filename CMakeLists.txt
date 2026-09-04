@@ -190,3 +190,12 @@ add_subdirectory(src)
 if(HINDSIGHT_BUILD_DOCS)
     add_subdirectory(docs)
 endif()
+
+include(GNUInstallDirs)
+install(TARGETS hindsight)
+install(
+    DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING
+    PATTERN *.hpp
+)
