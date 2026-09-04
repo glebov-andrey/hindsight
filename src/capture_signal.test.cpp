@@ -30,8 +30,8 @@
     #include <system_error>
 
     #include <errno.h>
+    #include <setjmp.h>
     #include <signal.h>
-    #include <ucontext.h>
 #endif
 
 #include <catch2/catch_test_macros.hpp>
@@ -62,18 +62,16 @@ stacktrace_entry signal_entries[max_stacktrace_capacity]{};
 stacktrace_entry *last_captured_signal_entry = nullptr;
 
 auto do_violation = true;
-native_context_type pre_violation_context;
+#ifdef HINDSIGHT_OS_WINDOWS
+CONTEXT pre_violation_context;
+#elif defined HINDSIGHT_OS_UNIX
+sigjmp_buf pre_violation_context;
+#endif
 
 auto reset_signal_stacktrace() noexcept {
     std::ranges::fill(signal_entries, stacktrace_entry{});
     last_captured_signal_entry = nullptr;
 }
-
-#ifdef HINDSIGHT_OS_WINDOWS
-    #define HINDSIGHT_TESTS_GET_CONTEXT(context) RtlCaptureContext(&(context))
-#else
-    #define HINDSIGHT_TESTS_GET_CONTEXT(context) getcontext(&(context))
-#endif
 
 auto raise_access_violation() {
     std::atomic_signal_fence(std::memory_order::release);
@@ -90,7 +88,11 @@ auto raise_access_violation() {
 template<bool TryExecute>
 auto cause_access_violation() {
     do_violation = true;
-    HINDSIGHT_TESTS_GET_CONTEXT(pre_violation_context);
+#ifdef HINDSIGHT_OS_WINDOWS
+    RtlCaptureContext(&pre_violation_context);
+#elif defined HINDSIGHT_OS_UNIX
+    sigsetjmp(pre_violation_context, 0);
+#endif
     std::atomic_signal_fence(std::memory_order::acquire); // synchronize with a signal handler that clears do_violation
 
     if (do_violation) {
@@ -135,11 +137,12 @@ template<bool RollbackContext>
         last_captured_signal_entry = capture_stacktrace_from_signal({signo, info, context},
                                                                     sig_begin(signal_entries),
                                                                     sig_end(signal_entries));
-        std::atomic_signal_fence(std::memory_order::release);
-
         if constexpr (RollbackContext) {
             do_violation = false;
-            setcontext(&pre_violation_context);
+        }
+        std::atomic_signal_fence(std::memory_order::release);
+        if constexpr (RollbackContext) {
+            siglongjmp(pre_violation_context, 1);
         }
     };
     sig_action.sa_flags = SA_SIGINFO;
