@@ -25,7 +25,12 @@
 #include <string_view>
 
 #include <dlfcn.h>
-#include <unistd.h> // close
+
+#ifdef HINDSIGHT_OS_LINUX
+    #include <unistd.h> // close, readlink
+
+    #include <link.h> // link_map
+#endif
 
 #include <backtrace.h>
 
@@ -79,6 +84,50 @@ auto encode_file_name(const char *const raw_file_name) -> std::string {
     return unix::transcode(unix::get_utf8_sanitizer(), raw_file_name_sv);
 }
 
+[[nodiscard]] auto find_module_by_address(const std::uintptr_t address) -> std::filesystem::path {
+#ifdef HINDSIGHT_OS_LINUX
+    // At least on Linux, Dl_info::dli_fname doesn't provide the full path to the main executable because it's loaded by
+    // the kernel, not the loader. It appears that Dl_info::dli_fname for the main executable is just argv[0].
+
+    // From https://sourceware.org/glibc/manual/latest/html_node/Dynamic-Linker-Introspection.html:
+    // link_map::l_name:
+    //   For the main executable, l_name is "" (the empty string). (The main executable is not loaded by the GNU C
+    //   Library, so its file name is not available.) On Linux, the main executable is available as /proc/self/exe.
+    auto dl_info = Dl_info{};
+    void *link_map_ptr = nullptr;
+    if (dladdr1(reinterpret_cast<void *>(address), &dl_info, &link_map_ptr, RTLD_DL_LINKMAP) == 0) {
+        return {};
+    }
+    assert(link_map_ptr);
+    const auto &module_link_map = *static_cast<const link_map *>(link_map_ptr);
+    if (module_link_map.l_prev == nullptr) { // true for the main executable
+        auto path = std::string(255, '\0');
+        while (true) {
+            const auto bytes_read = readlink("/proc/self/exe", path.data(), path.size());
+            if (bytes_read < 0) {
+                break; // Fallback to whatever dli_fname provides
+            }
+            const auto bytes_read_uz = static_cast<std::size_t>(bytes_read);
+            if (bytes_read_uz == path.size()) { // truncation occurred, try again
+                path.resize((path.size() + 1) * 2 - 1); // double the allocation size exactly
+                continue;
+            }
+            path.resize(bytes_read_uz);
+            return {std::move(path)};
+        }
+    }
+    return {dl_info.dli_fname};
+
+#else
+    // Fallback to dli_fname if we don't know a better implementation.
+    auto dl_info = Dl_info{};
+    if (dladdr(reinterpret_cast<void *>(address), &dl_info) == 0) {
+        return {};
+    }
+    return {dl_info.dli_fname};
+#endif
+}
+
 } // namespace
 
 class resolver::impl {};
@@ -118,10 +167,7 @@ auto resolver::resolve_impl(const stacktrace_entry entry, const resolve_cb callb
         }
     } state{.entry = entry, .callback = callback};
 
-    auto dl_info = Dl_info{};
-    if (dladdr(reinterpret_cast<void *>(entry.native_handle()), &dl_info)) {
-        state.physical_module = dl_info.dli_fname;
-    }
+    state.physical_module = find_module_by_address(entry.native_handle());
 
     const auto on_failure = [&] {
         callback(logical_stacktrace_entry{.physical = entry, .physical_module = std::move(state.physical_module)});
