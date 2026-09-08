@@ -39,6 +39,8 @@ struct HINDSIGHT_API logical_stacktrace_entry {
     std::uint_least32_t column_number{};
 
     bool is_inline{};
+
+    friend auto operator==(const logical_stacktrace_entry &lhs, const logical_stacktrace_entry &rhs) -> bool = default;
 };
 
 } // namespace hindsight

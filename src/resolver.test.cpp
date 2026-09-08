@@ -17,8 +17,12 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <concepts>
+#include <cstddef>
 #include <iterator>
+#include <ranges>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -63,6 +67,46 @@ TEST_CASE("A default-constructed resolver can be used") {
 
     auto r = resolver{};
     resolve_and_check(r, trace.front());
+}
+
+TEST_CASE("A resolver can be used from multiple threads") {
+    static constexpr std::size_t thread_count = 4;
+    static constexpr std::size_t resolve_count = 100;
+
+    auto r = resolver{};
+
+    const auto trace = capture_stacktrace();
+    auto ref_resolved = std::vector<logical_stacktrace_entry>{};
+    ref_resolved.reserve(trace.size());
+    for (const auto entry : trace) {
+        r.resolve(entry, std::back_inserter(ref_resolved), std::unreachable_sentinel);
+    }
+
+    auto threads = std::array<std::jthread, thread_count>{};
+    auto valid_results_per_thread = std::array<std::size_t, thread_count>{};
+
+    for (const auto thread_idx : std::views::iota(std::size_t{0}, thread_count)) {
+        threads[thread_idx] = std::jthread{[&, thread_idx] {
+            auto local_resolved = std::vector<logical_stacktrace_entry>{};
+            local_resolved.reserve(trace.size());
+
+            for ([[maybe_unused]] const auto i : std::views::iota(std::size_t{0}, resolve_count)) {
+                local_resolved.clear();
+
+                for (const auto entry : trace) {
+                    r.resolve(entry, std::back_inserter(local_resolved), std::unreachable_sentinel);
+                }
+                if (local_resolved == ref_resolved) {
+                    ++valid_results_per_thread[thread_idx];
+                }
+            }
+        }};
+    }
+    for (auto &thread : threads) {
+        thread.join();
+    }
+    REQUIRE(std::ranges::all_of(valid_results_per_thread,
+                                [](const std::size_t count) { return count == resolve_count; }));
 }
 
 #ifdef HINDSIGHT_OS_WINDOWS
