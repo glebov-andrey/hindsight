@@ -50,8 +50,8 @@ The following cache variables may also be set:
 
 execute_process(
     COMMAND
-        "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer/vswhere.exe" #
-        -latest -property installationPath -format value -utf8
+        "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer/vswhere.exe"
+        -latest -products * -property installationPath -format value -utf8
     OUTPUT_VARIABLE VSWHERE_OUTPUT
     ERROR_QUIET
     OUTPUT_STRIP_TRAILING_WHITESPACE

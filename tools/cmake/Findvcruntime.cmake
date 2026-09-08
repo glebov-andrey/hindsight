@@ -17,8 +17,7 @@
 execute_process(
     COMMAND
         "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer/vswhere.exe"
-        -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64
-        -property installationPath -format value -utf8
+        -latest -products * -property installationPath -format value -utf8
     OUTPUT_VARIABLE VSWHERE_OUTPUT
     ERROR_QUIET
     OUTPUT_STRIP_TRAILING_WHITESPACE
